@@ -138,7 +138,7 @@ export default function InvoiceList() {
                       <p className="flex items-center gap-1.5 font-medium text-slate-800">
                         {i.vendorInvoiceNo}
                         <SI className="size-3.5 text-slate-400" aria-label={i.source} />
-                        {i.attachmentName && <Paperclip className="size-3.5 text-slate-400" />}
+                        {(i.attachments?.length || i.attachmentName) && <Paperclip className="size-3.5 text-slate-400" />}
                       </p>
                     </td>
                     <td className="td max-w-56">

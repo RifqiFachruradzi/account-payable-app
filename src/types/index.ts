@@ -131,6 +131,20 @@ export interface InvoiceHistory {
   note?: string
 }
 
+export type AttachmentCategory = 'Invoice' | 'Faktur Pajak' | 'PO/SPK' | 'Dokumen Pendukung'
+
+/** Metadata lampiran; isi file disimpan di IndexedDB (lib/attachmentStore) */
+export interface Attachment {
+  id: ID
+  category: AttachmentCategory
+  name: string
+  type: string // MIME
+  size: number
+  uploadedAt: string
+  uploadedBy: string
+  note?: string
+}
+
 export interface Invoice {
   id: ID
   number: string // internal register no
@@ -156,7 +170,10 @@ export interface Invoice {
   paidAmount: number
   status: InvoiceStatus
   source: 'Manual' | 'Scan OCR' | 'E-Mail'
+  attachments?: Attachment[]
+  /** @deprecated lampiran lama (sebelum pengelompokan) */
   attachmentName?: string
+  /** @deprecated lampiran lama (sebelum pengelompokan) */
   attachmentDataUrl?: string
   ocrConfidence?: number
   history: InvoiceHistory[]

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
+  Attachment,
   AppUser,
   CompanySettings,
   GoodsReceipt,
@@ -17,6 +18,7 @@ import * as seed from '@/data/seed'
 import { uid } from '@/lib/id'
 import { nowISO, toISODate } from '@/lib/dates'
 import { buildApprovalSteps } from '@/lib/calc'
+import { clearFiles } from '@/lib/attachmentStore'
 
 export interface Toast {
   id: string
@@ -52,6 +54,8 @@ interface Actions {
   addInvoice: (inv: Omit<Invoice, 'id' | 'number' | 'history' | 'paidAmount'>, note?: string) => Invoice
   updateInvoice: (id: string, patch: Partial<Invoice>, action?: string) => void
   setInvoiceStatus: (id: string, status: InvoiceStatus, action: string, note?: string) => void
+  addAttachment: (invoiceId: string, att: Attachment) => void
+  removeAttachment: (invoiceId: string, attId: string) => void
   // spk
   updateSpk: (id: string, patch: Partial<SPK>) => void
   // payment request
@@ -141,6 +145,21 @@ export const useStore = create<Store>()(
           })),
         setInvoiceStatus: (id, status, action, note) =>
           set((s) => ({ invoices: s.invoices.map((i) => (i.id === id ? pushHistory({ ...i, status }, action, note) : i)) })),
+
+        addAttachment: (invoiceId, att) =>
+          set((s) => ({
+            invoices: s.invoices.map((i) =>
+              i.id === invoiceId ? pushHistory({ ...i, attachments: [...(i.attachments ?? []), att] }, `Lampiran ${att.category} ditambahkan`, att.name) : i,
+            ),
+          })),
+        removeAttachment: (invoiceId, attId) =>
+          set((s) => ({
+            invoices: s.invoices.map((i) => {
+              if (i.id !== invoiceId) return i
+              const att = i.attachments?.find((a) => a.id === attId)
+              return pushHistory({ ...i, attachments: (i.attachments ?? []).filter((a) => a.id !== attId) }, `Lampiran ${att?.category ?? ''} dihapus`, att?.name)
+            }),
+          })),
 
         updateSpk: (id, patch) => set((s) => ({ spks: s.spks.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
 
@@ -240,7 +259,10 @@ export const useStore = create<Store>()(
           return pay
         },
         updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
-        resetData: () => set({ ...initialData() }),
+        resetData: () => {
+          clearFiles().catch(() => undefined)
+          set({ ...initialData() })
+        },
       }
     },
     {

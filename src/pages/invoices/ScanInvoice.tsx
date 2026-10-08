@@ -11,6 +11,8 @@ import {
   FileText,
   Link2,
   Loader2,
+  Paperclip,
+  Plus,
   PencilLine,
   RotateCcw,
   Save,
@@ -18,8 +20,11 @@ import {
   Sparkles,
   Upload,
   UserPlus,
+  X,
 } from 'lucide-react'
-import { useStore } from '@/store/useStore'
+import { useCurrentUser, useStore } from '@/store/useStore'
+import { dataUrlToBlob, formatBytes, putFile } from '@/lib/attachmentStore'
+import { uid } from '@/lib/id'
 import { parseInvoiceText, runOcr, type OcrProgress, type ParsedInvoice } from '@/lib/ocr'
 import { resolveReferences, type ResolvedRefs } from '@/lib/resolve'
 import { renderSampleInvoice, type SampleSpec } from '@/lib/sampleInvoice'
@@ -31,7 +36,7 @@ import { Badge, Button, Card, Field, PageHeader, StatusBadge } from '@/component
 import { MatchPanel } from '@/components/ap/MatchPanel'
 import { VendorFormModal } from '@/pages/vendors/VendorForm'
 import { cn } from '@/lib/cn'
-import type { Invoice } from '@/types'
+import type { AttachmentCategory, Invoice } from '@/types'
 
 type Stage = 'upload' | 'processing' | 'review'
 
@@ -63,7 +68,12 @@ const FIELD_LABEL: Record<string, string> = {
 }
 
 export default function ScanInvoice() {
-  const { vendors, spks, pos, prs, grs, invoices, settings, addInvoice, notify } = useStore()
+  const { vendors, spks, pos, prs, grs, invoices, settings, addInvoice, addAttachment, notify } = useStore()
+  const me = useCurrentUser()
+  const [sourceFile, setSourceFile] = useState<File | null>(null)
+  const [extraFiles, setExtraFiles] = useState<{ category: AttachmentCategory; file: File }[]>([])
+  const extraRef = useRef<HTMLInputElement>(null)
+  const [extraCat, setExtraCat] = useState<AttachmentCategory>('Faktur Pajak')
   const nav = useNavigate()
   const [params] = useSearchParams()
   const [stage, setStage] = useState<Stage>(params.get('mode') === 'manual' ? 'review' : 'upload')
@@ -131,6 +141,7 @@ export default function ScanInvoice() {
     setError('')
     setStage('processing')
     setFileName(name)
+    setSourceFile(typeof input === 'string' ? null : input)
     setMethod('OCR')
     if (typeof input === 'string') setPreview(input)
     else if (input.type.startsWith('image/')) setPreview(URL.createObjectURL(input))
@@ -206,6 +217,8 @@ export default function ScanInvoice() {
 
   const reset = () => {
     setStage('upload')
+    setSourceFile(null)
+    setExtraFiles([])
     setPreview('')
     setRawText('')
     setParsed({ found: [] })
@@ -252,7 +265,7 @@ export default function ScanInvoice() {
   const duplicate = form.vendorId && form.vendorInvoiceNo && invoices.find((i) => i.vendorId === form.vendorId && i.vendorInvoiceNo.trim().toUpperCase() === form.vendorInvoiceNo.trim().toUpperCase())
   const totalMismatch = parsed.total && Math.abs(parsed.total - amounts.total) > 2
 
-  const save = () => {
+  const save = async () => {
     if (!form.vendorId) return notify({ type: 'error', title: 'Vendor belum dipilih', message: 'Pilih vendor atau daftarkan vendor baru.' })
     if (!form.vendorInvoiceNo.trim()) return notify({ type: 'error', title: 'No. invoice vendor wajib diisi' })
     if (form.dpp <= 0) return notify({ type: 'error', title: 'Nilai DPP harus lebih dari 0' })
@@ -276,12 +289,24 @@ export default function ScanInvoice() {
       ...amounts,
       status: summary === 'fail' || summary === 'na' ? 'Diterima' : 'Verifikasi',
       source: method === 'Manual' ? 'Manual' : 'Scan OCR',
-      attachmentName: fileName || undefined,
-      attachmentDataUrl: preview || undefined,
       ocrConfidence: method === 'Manual' ? undefined : confidence,
     }
     try {
       const inv = addInvoice(data, method !== 'Manual' ? `Dibaca otomatis (${method}) — ${parsed.found.length} field terbaca, matching: ${summary.toUpperCase()}` : undefined)
+      // Simpan dokumen asli hasil scan + lampiran tambahan ke IndexedDB
+      const files: { category: AttachmentCategory; name: string; blob: Blob }[] = []
+      if (sourceFile) files.push({ category: 'Invoice', name: fileName, blob: sourceFile })
+      else if (preview && method !== 'Manual') files.push({ category: 'Invoice', name: fileName, blob: await dataUrlToBlob(preview) })
+      extraFiles.forEach((x) => files.push({ category: x.category, name: x.file.name, blob: x.file }))
+      for (const f of files) {
+        const id = uid('att')
+        try {
+          await putFile(id, f.blob)
+          addAttachment(inv.id, { id, category: f.category, name: f.name, type: f.blob.type, size: f.blob.size, uploadedAt: new Date().toISOString(), uploadedBy: me.name })
+        } catch {
+          notify({ type: 'error', title: `Lampiran ${f.name} gagal disimpan` })
+        }
+      }
       notify({ type: 'success', title: 'Tagihan berhasil diregistrasi', message: `${inv.number} • ${formatIDR(inv.netPayable)}` })
       nav(`/invoices/${inv.id}`)
     } catch {
@@ -578,6 +603,48 @@ export default function ScanInvoice() {
               )}
               <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
                 Status awal setelah disimpan: <StatusBadge status={summary === 'fail' || summary === 'na' ? 'Diterima' : 'Verifikasi'} />
+              </div>
+              <div className="mt-4 rounded-lg border border-slate-200 p-3">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><Paperclip className="size-3.5" /> Lampiran tambahan</p>
+                <ul className="mt-2 space-y-1">
+                  {(sourceFile || (preview && method !== 'Manual')) && (
+                    <li className="flex items-center gap-2 text-xs text-slate-600"><Badge tone="blue">Invoice</Badge><span className="truncate">{fileName}</span></li>
+                  )}
+                  {extraFiles.map((x, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs text-slate-600">
+                      <Badge tone={x.category === 'Faktur Pajak' ? 'violet' : 'slate'}>{x.category}</Badge>
+                      <span className="min-w-0 flex-1 truncate">{x.file.name} <span className="text-slate-400">({formatBytes(x.file.size)})</span></span>
+                      <button onClick={() => setExtraFiles((f) => f.filter((_, j) => j !== i))} className="text-slate-400 hover:text-rose-600" aria-label="Hapus"><X className="size-3.5" /></button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {(['Invoice', 'Faktur Pajak', 'PO/SPK', 'Dokumen Pendukung'] as AttachmentCategory[]).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => {
+                        setExtraCat(c)
+                        extraRef.current?.click()
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-brand-300 hover:text-brand-700"
+                    >
+                      <Plus className="size-3" /> {c}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  ref={extraRef}
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const fs = Array.from(e.target.files ?? []).filter((f) => /^image\/|application\/pdf/.test(f.type) && f.size <= 15 * 1024 * 1024)
+                    setExtraFiles((x) => [...x, ...fs.map((file) => ({ category: extraCat, file }))])
+                    e.target.value = ''
+                  }}
+                />
               </div>
               <Button className="mt-4 w-full" size="lg" icon={Save} onClick={save} disabled={!!duplicate}>
                 Registrasi Tagihan

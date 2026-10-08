@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Ban, CheckCircle2, ClipboardCheck, FileText, History, Link2, Paperclip, PlayCircle, Save, ScanLine } from 'lucide-react'
+import { Ban, CheckCircle2, ClipboardCheck, FileText, History, Link2, PlayCircle, Save, ScanLine } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { matchInvoice, matchSummary } from '@/lib/calc'
 import { daysOverdue } from '@/lib/dates'
@@ -8,6 +8,7 @@ import { formatDate, formatDateTime, formatIDR, terbilangRupiah } from '@/lib/fo
 import { Badge, Button, Card, DescList, EmptyState, Field, Modal, PageHeader, StatusBadge } from '@/components/ui'
 import { DocumentTrail } from '@/components/ap/DocumentTrail'
 import { MatchPanel } from '@/components/ap/MatchPanel'
+import { AttachmentPanel } from '@/components/ap/AttachmentPanel'
 
 export default function InvoiceDetail() {
   const { id } = useParams()
@@ -134,6 +135,8 @@ export default function InvoiceDetail() {
             </div>
           </Card>
 
+          <AttachmentPanel invoice={inv} />
+
           <Card title="Vendor" actions={<Link to={`/vendors/${vendor.id}`} className="text-xs font-medium text-brand-600 hover:underline">Lihat master</Link>}>
             <DescList
               cols={3}
@@ -152,18 +155,6 @@ export default function InvoiceDetail() {
         <div className="space-y-6">
           <Card title="3-Way Matching" subtitle="Kontrak (SPK/PO) • Penerimaan (BAST/GR) • Tagihan">
             <MatchPanel checks={checks} />
-          </Card>
-          <Card title="Lampiran" icon={Paperclip}>
-            {inv.attachmentDataUrl ? (
-              <a href={inv.attachmentDataUrl} target="_blank" rel="noreferrer">
-                <img src={inv.attachmentDataUrl} alt="Lampiran" className="w-full rounded-lg border border-slate-200" />
-                <p className="mt-2 text-xs text-slate-500">{inv.attachmentName}</p>
-              </a>
-            ) : inv.attachmentName ? (
-              <p className="flex items-center gap-2 text-sm text-slate-600"><Paperclip className="size-4" /> {inv.attachmentName}</p>
-            ) : (
-              <p className="text-sm text-slate-500">Tidak ada lampiran.</p>
-            )}
           </Card>
           <Card title="Riwayat Proses" icon={History}>
             <ol className="relative space-y-4 border-l border-slate-200 pl-5">
