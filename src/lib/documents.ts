@@ -1,4 +1,4 @@
-import type { CompanySettings, GoodsReceipt, LineItem, PurchaseOrder, PurchaseRequisition, SPK, Vendor } from '@/types'
+import type { CompanySettings, DocSignature, GoodsReceipt, LineItem, PurchaseOrder, PurchaseRequisition, SPK, Vendor } from '@/types'
 import { formatDate, terbilangRupiah } from './format'
 
 /** Generator dokumen (canvas → gambar A4) berdasarkan data internal sistem */
@@ -143,15 +143,46 @@ function itemsTable(p: Page, top: number, items: LineItem[], ppnRate?: number) {
   return y + 30 + rows.length * 40
 }
 
-function signBlock(p: Page, y: number, cols: [string, string, string][]) {
+interface SignCol {
+  label: string
+  name: string
+  role: string
+  sig?: DocSignature
+  img?: HTMLImageElement
+  /** tampilkan coretan contoh bila tidak ada data tanda tangan (dokumen pihak ketiga) */
+  fake?: boolean
+}
+
+const loadImg = (src?: string) =>
+  new Promise<HTMLImageElement | undefined>((res) => {
+    if (!src) return res(undefined)
+    const img = new Image()
+    img.onload = () => res(img)
+    img.onerror = () => res(undefined)
+    img.src = src
+  })
+
+/** Muat gambar tanda tangan untuk tiap kolom */
+async function withImages(cols: SignCol[]) {
+  return Promise.all(cols.map(async (c) => ({ ...c, img: await loadImg(c.sig?.signature) })))
+}
+
+function signBlock(p: Page, y: number, cols: (SignCol | [string, string, string])[]) {
   const w = (W - 160) / cols.length
-  cols.forEach(([label, name, role], i) => {
+  cols.forEach((col, i) => {
+    const c: SignCol = Array.isArray(col) ? { label: col[0], name: col[1], role: col[2], fake: true } : col
     const cx = 80 + w * i + w / 2
-    p.text(label, cx, y, 19, false, '#333', 'center')
-    p.signature(cx, y + 70)
-    p.text(name, cx, y + 150, 19, true, '#111', 'center')
-    p.line(cx - 110, y + 158, cx + 110, y + 158, 1, '#555')
-    p.text(role, cx, y + 182, 17, false, '#555', 'center')
+    p.text(c.label, cx, y, 19, false, '#333', 'center')
+    if (c.img) {
+      const h = 100
+      const iw = Math.min(240, (c.img.width / c.img.height) * h)
+      p.ctx.drawImage(c.img, cx - iw / 2, y + 20, iw, h)
+    } else if (c.sig || c.fake) p.signature(cx, y + 70)
+    else p.text('(belum ditandatangani)', cx, y + 80, 16, false, '#aaa', 'center')
+    p.text(c.sig?.name ?? c.name, cx, y + 150, 19, true, '#111', 'center')
+    p.line(cx - 120, y + 158, cx + 120, y + 158, 1, '#555')
+    p.text(c.sig?.title || c.role, cx, y + 182, 16, false, '#555', 'center', w - 20)
+    if (c.sig) p.text(formatDate(c.sig.at), cx, y + 204, 15, false, '#777', 'center')
   })
 }
 
@@ -325,7 +356,7 @@ export function renderFakturPajak(
 }
 
 /** Dokumen Surat Perintah Kerja */
-export function renderSpkDocument(spk: SPK, vendor: Vendor, company: CompanySettings, po?: PurchaseOrder, pr?: PurchaseRequisition) {
+export async function renderSpkDocument(spk: SPK, vendor: Vendor, company: CompanySettings, po?: PurchaseOrder, pr?: PurchaseRequisition) {
   const p = new Page()
   companyHeader(p, company, 'SURAT PERINTAH KERJA (SPK)', spk.number)
   p.text('Yang bertanda tangan di bawah ini memberikan perintah kerja kepada:', 80, 400, 21)
@@ -361,17 +392,22 @@ export function renderSpkDocument(spk: SPK, vendor: Vendor, company: CompanySett
     y += 32
   })
   p.text(`Terbilang nilai kontrak: ${terbilangRupiah(spk.contractValue)}`, 80, y + 30, 18, false, '#555', 'left', W - 160)
-  p.text(`Jakarta, ${formatDate(spk.startDate, true)}`, W / 2, 1360, 20, false, '#111', 'center')
-  signBlock(p, 1400, [
-    ['Pemberi Kerja', 'Budi Santoso', `Direktur Keuangan, ${company.companyName.replace('PT ', 'PT. ')}`.slice(0, 60)],
-    ['Penerima Kerja', vendor.contactPerson, vendor.name],
-  ])
+  p.text(`Jakarta, ${formatDate(spk.date ?? spk.startDate, true)}`, W / 2, 1360, 20, false, '#111', 'center')
+  signBlock(
+    p,
+    1400,
+    await withImages([
+      { label: 'Pemberi Kerja', name: '……………………', role: company.companyName, sig: spk.companyApproval },
+      { label: 'Penerima Kerja', name: vendor.contactPerson, role: vendor.name, sig: spk.vendorAcceptance },
+    ]),
+  )
+  if (spk.status === 'Draft') p.watermark('DRAFT')
   p.footer(`Dokumen internal ${company.companyName} — PIC ${spk.pic} (${spk.department})`)
   return p.toDataUrl()
 }
 
 /** Dokumen Purchase Order */
-export function renderPoDocument(po: PurchaseOrder, vendor: Vendor, company: CompanySettings, pr?: PurchaseRequisition) {
+export async function renderPoDocument(po: PurchaseOrder, vendor: Vendor, company: CompanySettings, pr?: PurchaseRequisition) {
   const p = new Page()
   companyHeader(p, company, 'PURCHASE ORDER', po.number)
   const left: [string, string][] = [
@@ -392,23 +428,30 @@ export function renderPoDocument(po: PurchaseOrder, vendor: Vendor, company: Com
   })
   right.forEach(([k, v], i) => {
     p.text(k, 720, 400 + i * 34, 19, false, '#444')
-    p.text(`: ${v}`, 880, 400 + i * 34, 19, true)
+    p.text(`: ${v}`, 880, 400 + i * 34, 19, true, '#111', 'left', 280)
   })
-  const y = itemsTable(p, 560, po.items, po.ppnRate)
+  p.text('Alamat Kirim', 80, 552, 19, false, '#444')
+  p.text(`: ${po.deliveryAddress ?? '-'}`, 200, 552, 19, true, '#111', 'left', W - 280)
+  const y = itemsTable(p, 590, po.items, po.ppnRate)
   p.text('Syarat & Ketentuan:', 80, y + 50, 20, true)
   p.para(
-    `Pembayaran ${vendor.paymentTermDays} hari setelah tagihan lengkap diterima (invoice, faktur pajak, BAST/GR). Tagihan wajib mencantumkan nomor PO ini. Harga sudah termasuk biaya pengiriman ke lokasi.`,
+    `Pembayaran: ${po.paymentTerms ?? `${vendor.paymentTermDays} hari`} setelah tagihan lengkap diterima (invoice, faktur pajak, BAST/GR). Tagihan wajib mencantumkan nomor PO ini. Harga sudah termasuk biaya pengiriman ke lokasi.${po.notes ? ` Catatan: ${po.notes}` : ''}`,
     80,
     y + 85,
     W - 160,
     19,
     28,
   )
-  signBlock(p, 1400, [
-    ['Dibuat oleh', po.buyer, 'Procurement'],
-    ['Disetujui oleh', 'Dewi Kartika Sari', 'Finance Manager'],
-    ['Diterima Vendor', vendor.contactPerson, vendor.name],
-  ])
+  signBlock(
+    p,
+    1400,
+    await withImages([
+      { label: 'Dibuat oleh', name: po.buyer, role: 'Procurement', fake: true },
+      { label: 'Disetujui Perusahaan', name: '……………………', role: company.companyName, sig: po.companyApproval },
+      { label: 'Dikonfirmasi Vendor', name: vendor.contactPerson, role: vendor.name, sig: po.vendorAcceptance },
+    ]),
+  )
+  if (po.status === 'Draft') p.watermark('DRAFT')
   p.footer(`Dokumen internal ${company.companyName}`)
   return p.toDataUrl()
 }
@@ -451,6 +494,41 @@ export function renderReceiptDocument(gr: GoodsReceipt, vendor: Vendor, company:
     ['Yang Menyerahkan', vendor.contactPerson, vendor.name],
     ['Yang Menerima', gr.receivedBy, company.companyName],
   ])
+  p.footer(`Dokumen internal ${company.companyName}`)
+  return p.toDataUrl()
+}
+
+/** Dokumen Purchase Request (User → Procurement) */
+export async function renderPrDocument(pr: PurchaseRequisition, company: CompanySettings) {
+  const p = new Page()
+  companyHeader(p, company, 'PURCHASE REQUEST (PERMINTAAN PEMBELIAN)', pr.number)
+  const kv: [string, string][] = [
+    ['Kepada', 'Bagian Procurement'],
+    ['Dari (Departemen)', pr.department],
+    ['Pemohon', pr.requester],
+    ['Cost Center', pr.costCenter],
+    ['Tanggal', formatDate(pr.date, true)],
+    ['Dibutuhkan', pr.neededDate ? formatDate(pr.neededDate, true) : '-'],
+    ['Keperluan', pr.purpose],
+  ]
+  kv.forEach(([k, v], i) => {
+    p.text(k, 80, 400 + i * 34, 19, false, '#444')
+    p.text(`: ${v}`, 300, 400 + i * 34, 19, true, '#111', 'left', 840)
+  })
+  const y = itemsTable(p, 660, pr.items)
+  p.text('* Harga merupakan estimasi pemohon; harga final ditetapkan Procurement pada PO.', 80, y + 30, 17, false, '#666')
+  if (pr.notes) p.para(`Catatan: ${pr.notes}`, 80, y + 70, W - 160, 18, 26)
+  signBlock(
+    p,
+    1400,
+    await withImages([
+      { label: 'Diajukan oleh', name: pr.requester, role: `User — ${pr.department}`, sig: pr.submitted },
+      { label: pr.rejection ? 'Ditolak oleh' : 'Disetujui oleh', name: '……………………', role: 'Atasan / Finance', sig: pr.rejection ?? pr.approval },
+      { label: 'Diterima Procurement', name: '……………………', role: 'Procurement', sig: pr.status === 'Diproses PO' || pr.status === 'Selesai' ? pr.approval && { name: 'Yohanes Prasetyo', title: 'Procurement', at: pr.approval.at } : undefined },
+    ]),
+  )
+  if (pr.status === 'Draft') p.watermark('DRAFT')
+  if (pr.status === 'Ditolak') p.watermark('DITOLAK')
   p.footer(`Dokumen internal ${company.companyName}`)
   return p.toDataUrl()
 }

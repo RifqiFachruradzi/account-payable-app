@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, FileSignature, Hourglass, Receipt, Wallet } from 'lucide-react'
-import { useStore } from '@/store/useStore'
+import { Download, FileSignature, FileUp, Hourglass, Plus, Receipt, Wallet } from 'lucide-react'
+import { useCurrentUser, useStore } from '@/store/useStore'
+import { importSPK, SPK_TEMPLATE } from '@/lib/importers'
+import { CsvImportModal } from '@/components/docs/CsvImportModal'
 import { useLookups } from '@/lib/hooks'
 import { spkBilled, spkPaid } from '@/lib/calc'
 import { daysOverdue } from '@/lib/dates'
@@ -11,7 +13,9 @@ import { Badge, Button, KpiCard, PageHeader, Progress, SearchInput, StatusBadge,
 import type { SPKStatus } from '@/types'
 
 export default function SpkList() {
-  const { spks, invoices } = useStore()
+  const { spks, invoices, vendors, prs, pos, importDocs, notify } = useStore()
+  const me = useCurrentUser()
+  const [importOpen, setImportOpen] = useState(false)
   const lk = useLookups()
   const nav = useNavigate()
   const [tab, setTab] = useState<'outstanding' | SPKStatus | 'all'>('outstanding')
@@ -22,17 +26,17 @@ export default function SpkList() {
       spks.map((s) => {
         const billed = spkBilled(s, invoices)
         const paid = spkPaid(s, invoices)
-        return { s, billed, paid, remaining: s.contractValue - billed, unpaid: billed - paid }
+        return { s, billed, paid, remaining: s.contractValue - billed, unpaid: billed - paid, active: s.status === 'Berjalan' || s.status === 'Selesai' }
       }),
     [spks, invoices],
   )
 
   const filtered = rows
-    .filter((r) => (tab === 'all' ? true : tab === 'outstanding' ? r.remaining > 0 && r.s.status !== 'Dibatalkan' : r.s.status === tab))
+    .filter((r) => (tab === 'all' ? true : tab === 'outstanding' ? r.active && r.remaining > 0 : r.s.status === tab))
     .filter((r) => !q || `${r.s.number} ${r.s.title} ${lk.vendor.get(r.s.vendorId)?.name}`.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => b.remaining - a.remaining)
 
-  const tot = rows.reduce((t, r) => ({ c: t.c + r.s.contractValue, b: t.b + r.billed, p: t.p + r.paid, r: t.r + Math.max(0, r.remaining) }), { c: 0, b: 0, p: 0, r: 0 })
+  const tot = rows.filter((r) => r.active).reduce((t, r) => ({ c: t.c + r.s.contractValue, b: t.b + r.billed, p: t.p + r.paid, r: t.r + Math.max(0, r.remaining) }), { c: 0, b: 0, p: 0, r: 0 })
 
   return (
     <div className="space-y-6">
@@ -41,6 +45,8 @@ export default function SpkList() {
         description="Monitoring nilai kontrak, progres pekerjaan, realisasi tagihan dan sisa outstanding SPK."
         breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'SPK' }]}
         actions={
+          <>
+          <Button variant="secondary" icon={FileUp} onClick={() => setImportOpen(true)}>Import CSV</Button>
           <Button
             variant="secondary"
             icon={Download}
@@ -65,12 +71,14 @@ export default function SpkList() {
           >
             Export CSV
           </Button>
+          <Button icon={Plus} onClick={() => nav('/spk/new')}>Buat SPK</Button>
+          </>
         }
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Total Nilai Kontrak" value={formatCompact(tot.c)} hint={`${spks.length} SPK`} icon={FileSignature} />
-        <KpiCard label="Sudah Ditagih Vendor" value={formatCompact(tot.b)} hint={`${Math.round((tot.b / tot.c) * 100)}% dari kontrak`} icon={Receipt} tone="cyan" />
-        <KpiCard label="Sudah Dibayar" value={formatCompact(tot.p)} hint={`${Math.round((tot.p / tot.c) * 100)}% dari kontrak`} icon={Wallet} tone="emerald" />
+        <KpiCard label="Total Nilai Kontrak" value={formatCompact(tot.c)} hint={`${rows.filter((r) => r.active).length} SPK aktif`} icon={FileSignature} />
+        <KpiCard label="Sudah Ditagih Vendor" value={formatCompact(tot.b)} hint={`${Math.round((tot.b / (tot.c || 1)) * 100)}% dari kontrak`} icon={Receipt} tone="cyan" />
+        <KpiCard label="Sudah Dibayar" value={formatCompact(tot.p)} hint={`${Math.round((tot.p / (tot.c || 1)) * 100)}% dari kontrak`} icon={Wallet} tone="emerald" />
         <KpiCard label="Sisa SPK Outstanding" value={formatCompact(tot.r)} hint="Belum ditagihkan" icon={Hourglass} tone="violet" />
       </div>
 
@@ -80,9 +88,12 @@ export default function SpkList() {
             value={tab}
             onChange={setTab}
             tabs={[
-              { value: 'outstanding', label: 'Outstanding', count: rows.filter((r) => r.remaining > 0 && r.s.status !== 'Dibatalkan').length },
+              { value: 'outstanding', label: 'Outstanding', count: rows.filter((r) => r.active && r.remaining > 0).length },
+              { value: 'Draft', label: 'Draft', count: rows.filter((r) => r.s.status === 'Draft').length },
+              { value: 'Menunggu Konfirmasi Vendor', label: 'Konfirmasi Vendor', count: rows.filter((r) => r.s.status === 'Menunggu Konfirmasi Vendor').length },
               { value: 'Berjalan', label: 'Berjalan', count: rows.filter((r) => r.s.status === 'Berjalan').length },
               { value: 'Selesai', label: 'Selesai', count: rows.filter((r) => r.s.status === 'Selesai').length },
+              { value: 'Dibatalkan', label: 'Dibatalkan', count: rows.filter((r) => r.s.status === 'Dibatalkan').length },
               { value: 'all', label: 'Semua', count: rows.length },
             ]}
           />
@@ -135,6 +146,26 @@ export default function SpkList() {
           </table>
         </div>
       </div>
+      <CsvImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import SPK dari CSV"
+        template={SPK_TEMPLATE}
+        parse={(rows) => importSPK(rows, { vendors, prs, pos, spks, userName: me.name })}
+        columns={[
+          { label: 'No. SPK', render: (d) => <span className="font-mono">{d.number}</span> },
+          { label: 'Pekerjaan', render: (d) => d.title },
+          { label: 'Vendor', render: (d) => lk.vendor.get(d.vendorId)?.name },
+          { label: 'Periode', render: (d) => `${formatDate(d.startDate)} – ${formatDate(d.endDate)}`, className: 'whitespace-nowrap' },
+          { label: 'Termin', render: (d) => d.termins.map((t) => `${t.name} ${t.percent}%`).join(', ') },
+          { label: 'Nilai', render: (d) => formatIDR(d.contractValue), className: 'text-right whitespace-nowrap' },
+          { label: 'Status', render: (d) => <StatusBadge status={d.status} /> },
+        ]}
+        onImport={(docs) => {
+          importDocs({ spks: docs })
+          notify({ type: 'success', title: `${docs.length} SPK berhasil diimport` })
+        }}
+      />
     </div>
   )
 }

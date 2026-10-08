@@ -9,7 +9,14 @@ const ScanInvoice = lazy(() => import('@/pages/invoices/ScanInvoice'))
 const Outstanding = lazy(() => import('@/pages/invoices/Outstanding'))
 const SpkList = lazy(() => import('@/pages/spk/SpkList'))
 const SpkDetail = lazy(() => import('@/pages/spk/SpkDetail'))
-const Procurement = lazy(() => import('@/pages/procurement/Procurement'))
+const Receipts = lazy(() => import('@/pages/receipts/Receipts'))
+const PrList = lazy(() => import('@/pages/pr/PrList'))
+const PrForm = lazy(() => import('@/pages/pr/PrForm'))
+const PrDetail = lazy(() => import('@/pages/pr/PrDetail'))
+const PoList = lazy(() => import('@/pages/po/PoList'))
+const PoForm = lazy(() => import('@/pages/po/PoForm'))
+const PoDetail = lazy(() => import('@/pages/po/PoDetail'))
+const SpkForm = lazy(() => import('@/pages/spk/SpkForm'))
 const VendorList = lazy(() => import('@/pages/vendors/VendorList'))
 const VendorDetail = lazy(() => import('@/pages/vendors/VendorDetail'))
 const PaymentRequestList = lazy(() => import('@/pages/payments/PaymentRequestList'))
@@ -30,8 +37,19 @@ export default function App() {
         <Route path="/invoices/:id" element={<InvoiceDetail />} />
         <Route path="/outstanding" element={<Outstanding />} />
         <Route path="/spk" element={<SpkList />} />
+        <Route path="/spk/new" element={<SpkForm />} />
         <Route path="/spk/:id" element={<SpkDetail />} />
-        <Route path="/procurement" element={<Procurement />} />
+        <Route path="/spk/:id/edit" element={<SpkForm />} />
+        <Route path="/pr" element={<PrList />} />
+        <Route path="/pr/new" element={<PrForm />} />
+        <Route path="/pr/:id" element={<PrDetail />} />
+        <Route path="/pr/:id/edit" element={<PrForm />} />
+        <Route path="/po" element={<PoList />} />
+        <Route path="/po/new" element={<PoForm />} />
+        <Route path="/po/:id" element={<PoDetail />} />
+        <Route path="/po/:id/edit" element={<PoForm />} />
+        <Route path="/receipts" element={<Receipts />} />
+        <Route path="/procurement" element={<Navigate to="/pr" replace />} />
         <Route path="/vendors" element={<VendorList />} />
         <Route path="/vendors/:id" element={<VendorDetail />} />
         <Route path="/payment-requests" element={<PaymentRequestList />} />

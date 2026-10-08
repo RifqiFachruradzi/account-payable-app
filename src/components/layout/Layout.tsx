@@ -12,8 +12,10 @@ import {
   LayoutDashboard,
   Menu,
   Receipt,
+  PackageCheck,
   ScanLine,
   Settings,
+  ShoppingCart,
   ShieldCheck,
   X,
   type LucideIcon,
@@ -30,8 +32,11 @@ interface NavItem {
 }
 
 function useNav() {
-  const { invoices, paymentRequests } = useStore()
+  const { invoices, paymentRequests, prs, pos, spks } = useStore()
   const me = useCurrentUser()
+  const prPending = prs.filter((p) => p.status === 'Diajukan').length
+  const poPending = pos.filter((p) => p.status === 'Draft' || p.status === 'Menunggu Konfirmasi Vendor').length
+  const spkPending = spks.filter((s) => s.status === 'Draft' || s.status === 'Menunggu Konfirmasi Vendor').length
   const newInv = invoices.filter((i) => i.status === 'Diterima' || i.status === 'Verifikasi').length
   const myApprovals = paymentRequests.filter((p) => p.status === 'Menunggu Persetujuan' && p.steps.find((s) => s.status === 'Menunggu')?.role === me.role).length
   const toPay = paymentRequests.filter((p) => p.status === 'Disetujui').length
@@ -48,8 +53,10 @@ function useNav() {
     {
       group: 'Dokumen Internal',
       items: [
-        { to: '/spk', label: 'Surat Perintah Kerja', icon: FileSignature },
-        { to: '/procurement', label: 'PR & PO', icon: ClipboardList },
+        { to: '/pr', label: 'Purchase Request (PR)', icon: ClipboardList, badge: prPending },
+        { to: '/po', label: 'Purchase Order (PO)', icon: ShoppingCart, badge: poPending },
+        { to: '/spk', label: 'Surat Perintah Kerja', icon: FileSignature, badge: spkPending },
+        { to: '/receipts', label: 'Penerimaan (GR/BAST)', icon: PackageCheck },
       ],
     },
     {

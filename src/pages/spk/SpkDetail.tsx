@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Gauge, ScanLine } from 'lucide-react'
-import { useStore } from '@/store/useStore'
+import { Ban, Gauge, Handshake, Pencil, ScanLine, Stamp } from 'lucide-react'
+import { useCurrentUser, useStore } from '@/store/useStore'
+import { canApproveDocs, DOC_APPROVER_ROLES } from '@/lib/roles'
+import { renderSpkDocument } from '@/lib/documents'
+import { SignatureBox, SignatureDialog } from '@/components/docs/Signature'
+import { DocPreviewButton } from '@/components/docs/DocPreview'
 import { poValue, spkBilled, spkPaid } from '@/lib/calc'
 import { formatDate, formatIDR } from '@/lib/format'
 import { Badge, Button, Card, DescList, EmptyState, Field, Modal, PageHeader, Progress, StatusBadge } from '@/components/ui'
@@ -10,7 +14,9 @@ import type { SPKStatus } from '@/types'
 export default function SpkDetail() {
   const { id } = useParams()
   const nav = useNavigate()
-  const { spks, vendors, pos, prs, grs, invoices, updateSpk, notify } = useStore()
+  const { spks, vendors, pos, prs, grs, invoices, settings, updateSpk, notify } = useStore()
+  const me = useCurrentUser()
+  const [dialog, setDialog] = useState<'approve' | 'vendor' | 'cancel' | null>(null)
   const spk = spks.find((s) => s.id === id)
   const [open, setOpen] = useState(false)
   const [prog, setProg] = useState(0)
@@ -26,6 +32,7 @@ export default function SpkDetail() {
   const paid = spkPaid(spk, invoices)
   const remaining = spk.contractValue - billed
   const ppn = Math.round((spk.contractValue * spk.ppnRate) / 100)
+  const approver = canApproveDocs(me.role)
 
   // Alokasikan invoice ke termin secara berurutan
   const valid = invs.filter((i) => i.status !== 'Ditolak')
@@ -42,11 +49,33 @@ export default function SpkDetail() {
         description={`${spk.number} • ${vendor.name}`}
         actions={
           <>
-            <Button variant="secondary" icon={Gauge} onClick={() => { setProg(spk.progress); setStatus(spk.status); setOpen(true) }}>Update Progres</Button>
-            <Button icon={ScanLine} onClick={() => nav('/scan')}>Scan Tagihan SPK</Button>
+            <DocPreviewButton render={() => renderSpkDocument(spk, vendor, settings, po, pr)} fileName={`${spk.number.replace(/\//g, '-')}.jpg`} />
+            {spk.status === 'Draft' && <Button variant="secondary" icon={Pencil} onClick={() => nav(`/spk/${spk.id}/edit`)}>Ubah</Button>}
+            {(spk.status === 'Draft' || spk.status === 'Menunggu Konfirmasi Vendor') && (
+              <Button variant="secondary" icon={Ban} className="!text-rose-600" onClick={() => setDialog('cancel')}>Batalkan</Button>
+            )}
+            {spk.status === 'Draft' && approver && <Button icon={Stamp} onClick={() => setDialog('approve')}>Setujui & Terbitkan</Button>}
+            {spk.status === 'Menunggu Konfirmasi Vendor' && <Button variant="success" icon={Handshake} onClick={() => setDialog('vendor')}>Konfirmasi Vendor</Button>}
+            {(spk.status === 'Berjalan' || spk.status === 'Selesai') && (
+              <>
+                <Button variant="secondary" icon={Gauge} onClick={() => { setProg(spk.progress); setStatus(spk.status); setOpen(true) }}>Update Progres</Button>
+                <Button icon={ScanLine} onClick={() => nav('/scan')}>Scan Tagihan SPK</Button>
+              </>
+            )}
           </>
         }
       />
+
+      {spk.status === 'Draft' && !approver && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          SPK menunggu persetujuan & penerbitan oleh {DOC_APPROVER_ROLES.join(' / ')}. Ganti pengguna melalui menu profil untuk menyetujui.
+        </div>
+      )}
+      {spk.status === 'Menunggu Konfirmasi Vendor' && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+          SPK sudah diterbitkan perusahaan. Catat konfirmasi (tanda tangan) vendor untuk memulai pekerjaan.
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -145,6 +174,57 @@ export default function SpkDetail() {
           </table>
         </div>
       </Card>
+
+      <Card title="Penerbitan & Persetujuan">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SignatureBox label="Pemberi Kerja (Perusahaan)" sig={spk.companyApproval} pending={spk.status === 'Draft' ? 'Menunggu penerbitan' : undefined} />
+          <SignatureBox label="Penerima Kerja (Vendor)" sig={spk.vendorAcceptance} pending={spk.status === 'Menunggu Konfirmasi Vendor' ? 'Menunggu konfirmasi vendor' : undefined} />
+        </div>
+      </Card>
+
+      <SignatureDialog
+        open={dialog === 'approve'}
+        onClose={() => setDialog(null)}
+        title="Setujui & Terbitkan SPK"
+        description={`Nilai kontrak ${formatIDR(spk.contractValue + ppn)} (termasuk PPN) kepada ${vendor.name}`}
+        defaultName={me.name}
+        defaultTitle={me.title}
+        confirmLabel="Terbitkan SPK"
+        onSign={(sig) => {
+          updateSpk(spk.id, { status: 'Menunggu Konfirmasi Vendor', companyApproval: sig })
+          setDialog(null)
+          notify({ type: 'success', title: 'SPK diterbitkan', message: 'Menunggu konfirmasi vendor.' })
+        }}
+      />
+      <SignatureDialog
+        open={dialog === 'vendor'}
+        onClose={() => setDialog(null)}
+        title="Konfirmasi Vendor"
+        description={`Tanda tangan perwakilan ${vendor.name} sebagai penerimaan perintah kerja.`}
+        defaultName={vendor.contactPerson}
+        defaultTitle={`Perwakilan ${vendor.name}`}
+        confirmLabel="Simpan Konfirmasi"
+        tone="success"
+        onSign={(sig) => {
+          updateSpk(spk.id, { status: 'Berjalan', vendorAcceptance: sig })
+          setDialog(null)
+          notify({ type: 'success', title: 'SPK dikonfirmasi vendor', message: 'Status SPK: Berjalan.' })
+        }}
+      />
+      <SignatureDialog
+        open={dialog === 'cancel'}
+        onClose={() => setDialog(null)}
+        title="Batalkan SPK"
+        defaultName={me.name}
+        defaultTitle={me.title}
+        confirmLabel="Batalkan SPK"
+        tone="danger"
+        onSign={(sig) => {
+          updateSpk(spk.id, { status: 'Dibatalkan', notes: `Dibatalkan oleh ${sig.name}: ${sig.note}` })
+          setDialog(null)
+          notify({ type: 'info', title: 'SPK dibatalkan' })
+        }}
+      />
 
       <Modal
         open={open}

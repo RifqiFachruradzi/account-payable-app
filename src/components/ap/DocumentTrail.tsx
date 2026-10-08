@@ -26,8 +26,8 @@ export function DocumentTrail({ invoice }: { invoice: Invoice }) {
   const pay = prq && payments.find((p) => p.paymentRequestId === prq.id)
 
   const nodes: Node[] = [
-    { key: 'pr', label: 'Purchase Requisition', icon: ClipboardCheck, number: pr?.number, date: pr?.date, status: pr?.status, to: '/procurement?tab=pr' },
-    { key: 'po', label: 'Purchase Order', icon: ShoppingCart, number: po?.number, date: po?.date, status: po?.status, to: '/procurement?tab=po' },
+    { key: 'pr', label: 'Purchase Requisition', icon: ClipboardCheck, number: pr?.number, date: pr?.date, status: pr?.status, to: pr ? `/pr/${pr.id}` : undefined },
+    { key: 'po', label: 'Purchase Order', icon: ShoppingCart, number: po?.number, date: po?.date, status: po?.status, to: po ? `/po/${po.id}` : undefined },
     ...(spk || !po ? [{ key: 'spk', label: 'Surat Perintah Kerja', icon: FileSignature, number: spk?.number, date: spk?.startDate, status: spk?.status, to: spk ? `/spk/${spk.id}` : undefined }] : []),
     { key: 'gr', label: spk ? 'BAST' : 'Goods Receipt', icon: Stamp, number: gr?.number, date: gr?.date },
     { key: 'inv', label: 'Tagihan Vendor', icon: Receipt, number: invoice.vendorInvoiceNo, date: invoice.invoiceDate, status: invoice.status },

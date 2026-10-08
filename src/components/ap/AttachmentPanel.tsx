@@ -66,8 +66,8 @@ export function AttachmentPanel({ invoice }: { invoice: Invoice }) {
 
   const items = useMemo(() => {
     const list: DocItem[] = []
-    const sys = (category: AttachmentCategory, key: string, name: string, meta: string, render: () => string) =>
-      list.push({ key, category, name, type: 'image/jpeg', source: 'system', meta, load: () => dataUrlToBlob(render()) })
+    const sys = (category: AttachmentCategory, key: string, name: string, meta: string, render: () => string | Promise<string>) =>
+      list.push({ key, category, name, type: 'image/jpeg', source: 'system', meta, load: async () => dataUrlToBlob(await render()) })
 
     // Upload pengguna (IndexedDB)
     for (const a of invoice.attachments ?? []) {

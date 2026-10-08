@@ -44,8 +44,18 @@ export interface LineItem {
   unitPrice: number
 }
 
-export type PRStatus = 'Draft' | 'Disetujui' | 'Diproses PO' | 'Selesai' | 'Ditolak'
+/** Tanda tangan / persetujuan pada dokumen */
+export interface DocSignature {
+  name: string
+  title: string
+  at: string
+  signature?: string // data URL gambar tanda tangan
+  note?: string
+}
 
+export type PRStatus = 'Draft' | 'Diajukan' | 'Disetujui' | 'Diproses PO' | 'Selesai' | 'Ditolak'
+
+/** Purchase Request: diterbitkan User (departemen) ke bagian Procurement */
 export interface PurchaseRequisition {
   id: ID
   number: string
@@ -54,27 +64,47 @@ export interface PurchaseRequisition {
   requester: string
   costCenter: string
   purpose: string
+  neededDate?: string
   items: LineItem[]
   status: PRStatus
+  notes?: string
   approvedBy?: string
+  submitted?: DocSignature
+  approval?: DocSignature
+  rejection?: DocSignature
+  source?: 'Manual' | 'Import CSV'
 }
 
-export type POStatus = 'Open' | 'Partial Received' | 'Received' | 'Closed' | 'Cancelled'
+export type POStatus =
+  | 'Draft'
+  | 'Menunggu Konfirmasi Vendor'
+  | 'Open'
+  | 'Partial Received'
+  | 'Received'
+  | 'Closed'
+  | 'Cancelled'
 
+/** Purchase Order: diterbitkan Perusahaan ke Vendor, disetujui Perusahaan & dikonfirmasi Vendor */
 export interface PurchaseOrder {
   id: ID
   number: string
-  prId: ID
+  prId?: ID
   vendorId: ID
   date: string
   deliveryDate: string
+  deliveryAddress?: string
+  paymentTerms?: string
   items: LineItem[]
   ppnRate: number
   status: POStatus
   buyer: string
+  notes?: string
+  companyApproval?: DocSignature
+  vendorAcceptance?: DocSignature
+  source?: 'Manual' | 'Import CSV'
 }
 
-export type SPKStatus = 'Draft' | 'Berjalan' | 'Selesai' | 'Ditutup' | 'Dibatalkan'
+export type SPKStatus = 'Draft' | 'Menunggu Konfirmasi Vendor' | 'Berjalan' | 'Selesai' | 'Ditutup' | 'Dibatalkan'
 
 export interface SPKTermin {
   id: ID
@@ -83,9 +113,11 @@ export interface SPKTermin {
   milestone: string
 }
 
+/** Surat Perintah Kerja: diterbitkan Perusahaan ke Vendor */
 export interface SPK {
   id: ID
   number: string
+  date?: string
   poId?: ID
   prId?: ID
   vendorId: ID
@@ -101,6 +133,10 @@ export interface SPK {
   pic: string
   department: string
   status: SPKStatus
+  notes?: string
+  companyApproval?: DocSignature
+  vendorAcceptance?: DocSignature
+  source?: 'Manual' | 'Import CSV'
 }
 
 export interface GoodsReceipt {

@@ -74,7 +74,7 @@ const STATUS_TONE: Record<string, Tone> = {
   'Menunggu Persetujuan': 'amber', Draft: 'slate', Menunggu: 'amber', Dilewati: 'slate',
   Berjalan: 'blue', Selesai: 'emerald', Ditutup: 'slate', Dibatalkan: 'rose',
   Open: 'blue', 'Partial Received': 'amber', Received: 'emerald', Closed: 'slate', Cancelled: 'rose',
-  'Diproses PO': 'violet', Aktif: 'emerald', 'Non-Aktif': 'slate', Blacklist: 'rose',
+  'Diproses PO': 'violet', Diajukan: 'amber', 'Menunggu Konfirmasi Vendor': 'violet', Aktif: 'emerald', 'Non-Aktif': 'slate', Blacklist: 'rose',
   'Belum Jatuh Tempo': 'emerald', '1-30 Hari': 'amber', '31-60 Hari': 'orange', '61-90 Hari': 'rose', '> 90 Hari': 'rose',
 }
 export const statusTone = (s: string): Tone => STATUS_TONE[s] ?? 'slate'

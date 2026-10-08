@@ -16,8 +16,10 @@ Dibangun dengan **React 19 + TypeScript + Vite**, **Tailwind CSS v4**, **Rechart
 | **Scan Tagihan (OCR)** | Unggah file / ambil foto (kamera HP) / PDF. Sistem membaca vendor, **NPWP**, no. invoice, tanggal, jatuh tempo, no. faktur pajak, no. SPK/PO/PR, DPP, PPN, total & rekening — lalu **menarik otomatis dokumen internal** (Vendor via NPWP, SPK, PO, PR, BAST/GR) dan menjalankan **3-way matching** serta deteksi duplikat. Tersedia contoh tagihan untuk uji coba. |
 | **Tagihan Masuk** | Register tagihan, filter status/vendor, export CSV, detail tagihan dengan alur dokumen (PR→PO→SPK→BAST→Invoice→PP→Bayar), hasil matching, lampiran & riwayat proses, verifikasi / tolak / ubah rujukan |
 | **Outstanding & Aging** | Aging bucket (belum jatuh tempo, 1-30, 31-60, 61-90, >90 hari), filter overdue & jatuh tempo ≤ 7 hari, ringkasan per vendor |
-| **SPK** | Nilai kontrak, progres fisik, realisasi tagihan, sisa outstanding, jadwal termin, BAST, update progres |
-| **PR & PO** | Data Purchase Requisition, Purchase Order & penerimaan (GR/BAST) sebagai rujukan |
+| **SPK** | Surat Perintah Kerja dari Perusahaan ke Vendor: form manual (termin pembayaran) & **import CSV**, terbitkan (TTD Perusahaan) → konfirmasi Vendor (TTD) → Berjalan; monitoring nilai kontrak, progres, realisasi tagihan & sisa outstanding |
+| **Purchase Request (PR)** | Permintaan pembelian dari User (departemen) ke Procurement: form input manual & **import CSV**, ajukan (TTD pemohon) → setujui / tolak (TTD Finance Manager ke atas) → buat PO, dokumen PR siap unduh |
+| **Purchase Order (PO)** | Pesanan dari Perusahaan ke Vendor (bisa dari PR): form manual & **import CSV**, **persetujuan Perusahaan** (TTD) → **konfirmasi Vendor** (TTD) → Open, batalkan, dokumen PO bertanda tangan |
+| **Penerimaan (GR/BAST)** | Bukti penerimaan barang & berita acara serah terima pekerjaan beserta dokumennya |
 | **Vendor Master** | CRUD vendor: identitas, **NPWP (15/16 digit, tervalidasi & unik)**, NIB, status PKP, jenis PPh, alamat, kontak, rekening bank, termin |
 | **Pengajuan Pembayaran** | Form pengajuan dari tagihan terverifikasi, jalur otorisasi otomatis dari **matriks otorisasi** berdasarkan nilai, **tanda tangan digital** tiap PIC (AP Staff → AP Supervisor → Finance Manager → Finance Director → Presiden Direktur), tolak dengan alasan, **formulir siap cetak** dengan terbilang |
 | **Persetujuan Saya** | Antrean tanda tangan per peran & riwayat |
@@ -37,6 +39,9 @@ Catatan:
 - Aset OCR (worker, WASM, model bahasa) disalin otomatis ke `dist/tesseract` saat build, jadi OCR berjalan dari domain Vercel Anda sendiri (tanpa CDN pihak ketiga).
 - Tidak ada environment variable yang perlu diisi. Node.js ≥ 20.19 (default Vercel sudah sesuai).
 - Data tersimpan di `localStorage` browser masing-masing pengguna (mode demo) dan dapat direset dari menu **Pengaturan**.
+
+### Import CSV (PR, PO, SPK)
+Di halaman masing-masing klik **Import CSV** → unduh template → isi di Excel / Google Sheets → simpan sebagai CSV → unggah. Pemisah `;` atau `,`, angka boleh memakai pemisah ribuan (`1.500.000`), tanggal `YYYY-MM-DD` / `DD/MM/YYYY`. Data divalidasi per baris (vendor harus terdaftar & aktif, PR harus sudah disetujui, total termin SPK 100%, dll.) dan baris yang salah dilewati dengan pesan kesalahan.
 
 ### Catatan OCR
 - OCR berjalan sepenuhnya di browser (dokumen tidak dikirim ke server). Mesin & model bahasa Tesseract disajikan dari aplikasi sendiri (`/tesseract`) dan di-cache browser setelah pemakaian pertama.

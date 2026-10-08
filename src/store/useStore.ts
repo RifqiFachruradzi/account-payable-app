@@ -56,8 +56,14 @@ interface Actions {
   setInvoiceStatus: (id: string, status: InvoiceStatus, action: string, note?: string) => void
   addAttachment: (invoiceId: string, att: Attachment) => void
   removeAttachment: (invoiceId: string, attId: string) => void
-  // spk
+  // dokumen internal
   updateSpk: (id: string, patch: Partial<SPK>) => void
+  saveSpk: (spk: SPK) => void
+  savePR: (pr: PurchaseRequisition) => void
+  updatePR: (id: string, patch: Partial<PurchaseRequisition>) => void
+  savePO: (po: PurchaseOrder) => void
+  updatePO: (id: string, patch: Partial<PurchaseOrder>) => void
+  importDocs: (docs: { prs?: PurchaseRequisition[]; pos?: PurchaseOrder[]; spks?: SPK[] }) => void
   // payment request
   createPaymentRequest: (
     data: Omit<PaymentRequest, 'id' | 'number' | 'steps' | 'status' | 'createdBy' | 'amount' | 'pphAmount' | 'netAmount'>,
@@ -94,6 +100,18 @@ const nextNumber = (prefix: string, existing: string[]) => {
     .map((n) => parseInt(n.split('/').pop() || '0', 10))
     .reduce((a, b) => Math.max(a, b), 0)
   return { year, n: max + 1 }
+}
+
+const upsert = <T extends { id: string }>(arr: T[], item: T) =>
+  arr.some((x) => x.id === item.id) ? arr.map((x) => (x.id === item.id ? item : x)) : [...arr, item]
+
+/** Nomor dokumen berikutnya, mis. PR/2026/GEN/0015, PO/2026/00012, SPK/2026/NMS/009 */
+export function nextDocNumber(kind: 'PR' | 'PO' | 'SPK', existing: string[], opts: { dept?: string; offset?: number } = {}) {
+  const { year, n } = nextNumber(kind, existing)
+  const k = n + (opts.offset ?? 0)
+  if (kind === 'PR') return `PR/${year}/${(opts.dept || 'GEN').replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase().padEnd(3, 'X')}/${String(k).padStart(4, '0')}`
+  if (kind === 'PO') return `PO/${year}/${String(k).padStart(5, '0')}`
+  return `SPK/${year}/NMS/${String(k).padStart(3, '0')}`
 }
 
 export const useStore = create<Store>()(
@@ -162,6 +180,25 @@ export const useStore = create<Store>()(
           })),
 
         updateSpk: (id, patch) => set((s) => ({ spks: s.spks.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
+        saveSpk: (spk) => set((s) => ({ spks: upsert(s.spks, spk) })),
+        savePR: (pr) => set((s) => ({ prs: upsert(s.prs, pr) })),
+        updatePR: (id, patch) => set((s) => ({ prs: s.prs.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
+        savePO: (po) =>
+          set((s) => ({
+            pos: upsert(s.pos, po),
+            // PR yang dirujuk PO berpindah status menjadi Diproses PO
+            prs: s.prs.map((r) => (r.id === po.prId && r.status === 'Disetujui' && po.status !== 'Cancelled' ? { ...r, status: 'Diproses PO' } : r)),
+          })),
+        updatePO: (id, patch) => set((s) => ({ pos: s.pos.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
+        importDocs: ({ prs = [], pos = [], spks = [] }) =>
+          set((s) => {
+            const linkedPr = new Set(pos.map((p) => p.prId).filter(Boolean))
+            return {
+              prs: [...s.prs.map((r) => (linkedPr.has(r.id) && r.status === 'Disetujui' ? { ...r, status: 'Diproses PO' as const } : r)), ...prs],
+              pos: [...s.pos, ...pos],
+              spks: [...s.spks, ...spks],
+            }
+          }),
 
         createPaymentRequest: (data, signature) => {
           const invs = get().invoices.filter((i) => data.invoiceIds.includes(i.id))
@@ -272,7 +309,33 @@ export const useStore = create<Store>()(
         void _t
         return Object.fromEntries(Object.entries(rest).filter(([, v]) => typeof v !== 'function')) as unknown as Data
       },
-      migrate: () => initialData() as unknown as Store,
+      migrate: (persisted, version) => {
+        // v3 → v4: dokumen PR/PO/SPK mendapat jejak persetujuan; data pengguna dipertahankan
+        if (version === 3 && persisted) {
+          const d = persisted as Data
+          const legacy = (name: string, title: string, at: string) => ({ name, title, at, signature: seed.demoSignature(name), note: 'Data sebelum fitur persetujuan' })
+          return {
+            ...d,
+            version: 4,
+            prs: d.prs.map((p) =>
+              ['Disetujui', 'Diproses PO', 'Selesai'].includes(p.status) && !p.approval
+                ? { ...p, submitted: legacy(p.requester, `User — ${p.department}`, p.date), approval: legacy(p.approvedBy ?? 'Dewi Kartika Sari', 'Finance Manager', p.date) }
+                : p,
+            ),
+            pos: d.pos.map((o) => {
+              if (o.companyApproval || o.status === 'Draft' || o.status === 'Cancelled') return o
+              const v = d.vendors.find((x) => x.id === o.vendorId)
+              return { ...o, companyApproval: legacy('Budi Santoso', 'Direktur Keuangan', o.date), vendorAcceptance: legacy(v?.contactPerson ?? 'Vendor', 'Perwakilan Vendor', o.date) }
+            }),
+            spks: d.spks.map((k) => {
+              if (k.companyApproval || k.status === 'Draft' || k.status === 'Dibatalkan') return k
+              const v = d.vendors.find((x) => x.id === k.vendorId)
+              return { ...k, companyApproval: legacy('Budi Santoso', 'Direktur Keuangan', k.startDate), vendorAcceptance: legacy(v?.contactPerson ?? 'Vendor', 'Perwakilan Vendor', k.startDate) }
+            }),
+          } as unknown as Store
+        }
+        return initialData() as unknown as Store
+      },
     },
   ),
 )

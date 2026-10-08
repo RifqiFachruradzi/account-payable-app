@@ -13,7 +13,7 @@ import type {
   SPK,
   Vendor,
 } from '@/types'
-import { addDays, daysAgo } from '@/lib/dates'
+import { addDays, daysAgo, daysFromNow } from '@/lib/dates'
 import { computeInvoiceAmounts, pphRateFor } from '@/lib/calc'
 
 export const USERS: AppUser[] = [
@@ -145,10 +145,17 @@ for (const p of PROJECTS) {
   const pr: PurchaseRequisition = {
     id: `pr${p.key}`, number: `PR/${YEAR}/${p.dept.slice(0, 3).toUpperCase()}/${p.key.padStart(4, '0')}`, date: prDate, department: p.dept,
     requester: p.requester, costCenter: p.cc, purpose: p.title, items: p.items, status: 'Diproses PO', approvedBy: 'Dewi Kartika Sari',
+    neededDate: addDays(prDate, 30),
+    submitted: { name: p.requester, title: `User — ${p.dept}`, at: `${prDate}T09:00:00`, signature: demoSignature(p.requester) },
+    approval: { name: 'Dewi Kartika Sari', title: 'Finance Manager', at: `${addDays(prDate, 2)}T14:00:00`, signature: demoSignature('Dewi Kartika Sari') },
   }
+  const vendorCp = VENDORS.find((v) => v.id === p.vendorId)!.contactPerson
   const po: PurchaseOrder = {
     id: `po${p.key}`, number: `PO/${YEAR}/${p.key.padStart(5, '0')}`, prId: pr.id, vendorId: p.vendorId, date: poDate,
     deliveryDate: addDays(poDate, p.spk ? p.spk.durationDays : 21), items: p.items, ppnRate: 11, status: 'Open', buyer: 'Yohanes Prasetyo',
+    deliveryAddress: SETTINGS.companyAddress, paymentTerms: `${VENDORS.find((v) => v.id === p.vendorId)!.paymentTermDays} hari setelah tagihan lengkap diterima`,
+    companyApproval: { name: 'Budi Santoso', title: 'Direktur Keuangan', at: `${poDate}T15:00:00`, signature: demoSignature('Budi Santoso') },
+    vendorAcceptance: { name: vendorCp, title: 'Perwakilan Vendor', at: `${addDays(poDate, 1)}T10:00:00`, signature: demoSignature(vendorCp) },
   }
   PRS.push(pr)
   POS.push(po)
@@ -157,15 +164,21 @@ for (const p of PROJECTS) {
     SPKS.push({
       id: `spk${p.key}`, number: `SPK/${YEAR}/NMS/${p.key.padStart(3, '0')}`, poId: po.id, prId: pr.id, vendorId: p.vendorId, title: p.title,
       scope: p.spk.scope, location: p.spk.location, startDate: start, endDate: addDays(start, p.spk.durationDays), contractValue: sum(p.items), ppnRate: 11,
-      progress: p.spk.progress, pic: p.spk.pic, department: p.dept, status: p.spk.status,
+      progress: p.spk.progress, pic: p.spk.pic, department: p.dept, status: p.spk.status, date: addDays(poDate, 3),
+      companyApproval: { name: 'Budi Santoso', title: 'Direktur Keuangan', at: `${addDays(poDate, 3)}T15:00:00`, signature: demoSignature('Budi Santoso') },
+      vendorAcceptance: { name: vendorCp, title: 'Perwakilan Vendor', at: `${addDays(poDate, 4)}T10:00:00`, signature: demoSignature(vendorCp) },
       termins: p.spk.termins.map(([name, percent, milestone], i) => ({ id: `t${p.key}${i}`, name, percent, milestone })),
     })
   }
 }
 // PR tambahan yang belum diproses PO
 PRS.push(
-  { id: 'pr12', number: `PR/${YEAR}/GEN/0012`, date: daysAgo(6), department: 'General Affairs', requester: 'Agus Salim', costCenter: 'CC-GA-01', purpose: 'Pengadaan Kursi Ergonomis Ruang Rapat', items: [L('Kursi ergonomis mesh', 40, 'Unit', 2_850_000)], status: 'Disetujui', approvedBy: 'Dewi Kartika Sari' },
-  { id: 'pr13', number: `PR/${YEAR}/MAR/0013`, date: daysAgo(3), department: 'Marketing', requester: 'Citra Ayu', costCenter: 'CC-MKT-01', purpose: 'Produksi Materi Promosi Akhir Tahun', items: [L('Cetak brosur A4 art paper', 20_000, 'Lembar', 2_100), L('Standing banner', 50, 'Unit', 350_000)], status: 'Draft' },
+  { id: 'pr12', number: `PR/${YEAR}/GEN/0012`, date: daysAgo(6), department: 'General Affairs', requester: 'Agus Salim', costCenter: 'CC-GA-01', purpose: 'Pengadaan Kursi Ergonomis Ruang Rapat', items: [L('Kursi ergonomis mesh', 40, 'Unit', 2_850_000)], status: 'Disetujui', approvedBy: 'Dewi Kartika Sari', neededDate: daysFromNow(21),
+    submitted: { name: 'Agus Salim', title: 'User — General Affairs', at: `${daysAgo(6)}T09:00:00`, signature: demoSignature('Agus Salim') },
+    approval: { name: 'Dewi Kartika Sari', title: 'Finance Manager', at: `${daysAgo(4)}T11:00:00`, signature: demoSignature('Dewi Kartika Sari') } },
+  { id: 'pr13', number: `PR/${YEAR}/MAR/0013`, date: daysAgo(3), department: 'Marketing', requester: 'Citra Ayu', costCenter: 'CC-MKT-01', purpose: 'Produksi Materi Promosi Akhir Tahun', items: [L('Cetak brosur A4 art paper', 20_000, 'Lembar', 2_100), L('Standing banner', 50, 'Unit', 350_000)], status: 'Diajukan', neededDate: daysFromNow(30),
+    submitted: { name: 'Citra Ayu', title: 'User — Marketing', at: `${daysAgo(3)}T10:30:00`, signature: demoSignature('Citra Ayu') } },
+  { id: 'pr14', number: `PR/${YEAR}/OPS/0014`, date: daysAgo(1), department: 'Operations', requester: 'Taufik Hidayat', costCenter: 'CC-OPS-01', purpose: 'Sparepart Forklift & Pallet Kayu', items: [L('Ban forklift solid 28x9-15', 4, 'Pcs', 3_750_000), L('Pallet kayu 120x100 cm', 200, 'Pcs', 185_000)], status: 'Draft', neededDate: daysFromNow(14) },
 )
 POS.find((p) => p.id === 'po03')!.status = 'Closed'
 POS.find((p) => p.id === 'po09')!.status = 'Partial Received'
@@ -317,4 +330,4 @@ SPKS.forEach((s) => {
   if (s.status === 'Selesai') POS.find((p) => p.id === s.poId)!.status = 'Received'
 })
 
-export const SEED_VERSION = 3
+export const SEED_VERSION = 4
