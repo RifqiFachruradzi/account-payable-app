@@ -39,7 +39,7 @@ Catatan:
 - Data tersimpan di `localStorage` browser masing-masing pengguna (mode demo) dan dapat direset dari menu **Pengaturan**.
 
 ### Catatan OCR
-- OCR berjalan sepenuhnya di browser (dokumen tidak dikirim ke server). Saat pertama dipakai, mesin & model bahasa Tesseract diunduh dari CDN jsDelivr.
+- OCR berjalan sepenuhnya di browser (dokumen tidak dikirim ke server). Mesin & model bahasa Tesseract disajikan dari aplikasi sendiri (`/tesseract`) dan di-cache browser setelah pemakaian pertama.
 - PDF digital dibaca langsung dari text layer (akurasi ~100%); PDF hasil scan & foto dibaca dengan OCR setelah pra-proses (grayscale + kontras).
 - Field yang terisi otomatis ditandai hijau (**OCR** / **AUTO**) dan tetap dapat dikoreksi sebelum registrasi.
 
