@@ -25,7 +25,7 @@ import {
 import { useCurrentUser, useStore } from '@/store/useStore'
 import { dataUrlToBlob, formatBytes, putFile } from '@/lib/attachmentStore'
 import { uid } from '@/lib/id'
-import { coreName, parseInvoiceText, runOcr, type OcrProgress, type ParsedInvoice, type VendorSource } from '@/lib/ocr'
+import { coreName, parseInvoiceText, runOcr, type OcrProgress, type ParsedInvoice } from '@/lib/ocr'
 import { resolveReferences, type ResolvedRefs } from '@/lib/resolve'
 import { renderSampleInvoice, type SampleSpec } from '@/lib/sampleInvoice'
 import { computeInvoiceAmounts, matchInvoice, matchSummary, poValue, pphRateFor, spkBilled } from '@/lib/calc'
@@ -39,14 +39,6 @@ import { cn } from '@/lib/cn'
 import type { AttachmentCategory, Invoice, Vendor } from '@/types'
 
 type Stage = 'upload' | 'processing' | 'review'
-
-const SOURCE_LABEL: Record<VendorSource, string> = {
-  'Kop Invoice': 'Kop',
-  'Tanda Tangan / Stempel': 'TTD / Stempel',
-  'Rekening (a.n.)': 'Rekening a.n.',
-  'Dekat NPWP': 'NPWP',
-  'Isi Dokumen': 'Isi dokumen',
-}
 
 /** Vendor fiktif untuk contoh tagihan dari vendor yang belum terdaftar */
 const UNREGISTERED_VENDOR: Vendor = {
@@ -536,27 +528,6 @@ export default function ScanInvoice() {
                         </span>
                       </div>
                       <p className="mt-1 flex items-center gap-1 text-xs text-slate-500"><PencilLine className="size-3" /> Nama hasil scan dapat diedit bila masih salah</p>
-                      {!!parsed.vendorCandidates?.length && (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <span className="text-xs text-slate-500">Saran dari dokumen:</span>
-                          {parsed.vendorCandidates.map((c) => (
-                            <button
-                              key={c.name}
-                              type="button"
-                              onClick={() => setVendorName(c.name)}
-                              className={cn(
-                                'inline-flex flex-wrap items-center gap-1 rounded-md border px-2 py-1 text-left text-xs transition',
-                                c.name === vendorName ? 'border-brand-500 bg-brand-50 text-brand-800' : 'border-line bg-white text-slate-700 hover:border-brand-300',
-                              )}
-                            >
-                              <span className="mr-0.5 whitespace-nowrap font-medium">{c.name}</span>
-                              {c.sources.map((src) => (
-                                <span key={src} className="whitespace-nowrap rounded bg-slate-100 px-1 text-slate-500">{SOURCE_LABEL[src]}</span>
-                              ))}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                       {nameMatch && (
                         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                           <CheckCircle2 className="size-3.5" /> Nama cocok dengan vendor terdaftar <b>{nameMatch.name}</b> ({nameMatch.npwp})
