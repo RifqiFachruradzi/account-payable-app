@@ -35,6 +35,7 @@ import { formatNPWP } from '@/lib/npwp'
 import { Badge, Button, Card, Field, PageHeader, StatusBadge } from '@/components/ui'
 import { MatchPanel } from '@/components/ap/MatchPanel'
 import { VendorFormModal } from '@/pages/vendors/VendorForm'
+import { DocNumberInput } from '@/components/docs/DocNumberInput'
 import { cn } from '@/lib/cn'
 import type { AttachmentCategory, Invoice, Vendor } from '@/types'
 
@@ -121,6 +122,18 @@ export default function ScanInvoice() {
   const pr = prs.find((p) => p.id === form.prId)
   const gr = grs.find((g) => g.id === form.grId)
   const amounts = computeInvoiceAmounts(form.dpp, form.ppnRate, form.pphRate)
+  const vendorName_ = (id: string) => vendors.find((v) => v.id === id)?.name ?? ''
+  const spkOptions = useMemo(
+    () => spks.filter((x) => x.status !== 'Draft' && x.status !== 'Dibatalkan').map((x) => ({ id: x.id, number: x.number, detail: `${x.title} • ${vendorName_(x.vendorId)}` })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [spks, vendors],
+  )
+  const poOptions = useMemo(
+    () => pos.filter((x) => x.status !== 'Draft' && x.status !== 'Cancelled').map((x) => ({ id: x.id, number: x.number, detail: `${vendorName_(x.vendorId)} • ${formatCompact(poValue(x))}` })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pos, vendors],
+  )
+  const grOptions = useMemo(() => grs.map((g) => ({ id: g.id, number: g.number, detail: `${g.description} • ${formatCompact(g.amount)}` })), [grs])
   const unknownVendor = !form.vendorId && method !== 'Manual' && !pickFromList && !!(parsed.vendorName || parsed.npwp || parsed.vendorCandidates?.length)
   // Nama yang diketik / dikoreksi dicocokkan ulang ke Vendor Master
   const nameMatch = useMemo(() => {
@@ -627,23 +640,25 @@ export default function ScanInvoice() {
           <div className={cn('space-y-4', method === 'Manual' ? 'xl:col-span-5' : 'xl:col-span-3')}>
             <Card title="Dokumen Internal (Rujukan)" subtitle="Ditarik otomatis dari sistem" icon={Link2}>
               <div className="space-y-3">
-                <Field label="Surat Perintah Kerja (SPK)">
-                  <select className={cn('input', ocrCls('spkId'))} value={form.spkId} onChange={(e) => pickSpk(e.target.value)}>
-                    <option value="">— Tanpa SPK —</option>
-                    {spks.filter((s) => !form.vendorId || s.vendorId === form.vendorId).map((s) => <option key={s.id} value={s.id}>{s.number} — {s.title}</option>)}
-                  </select>
+                <p className="text-xs text-slate-500">Ketik nomor dokumen — data akan terbaca otomatis.</p>
+                <Field label="No. Surat Perintah Kerja (SPK)">
+                  <DocNumberInput
+                    docs={spkOptions}
+                    value={form.spkId}
+                    onResolve={(id) => (id ? pickSpk(id) : set('spkId', ''))}
+                    placeholder="Contoh: SPK/2026/NMS/001"
+                  />
                 </Field>
-                <Field label="Purchase Order (PO)">
-                  <select className={cn('input', ocrCls('poId'))} value={form.poId} onChange={(e) => pickPo(e.target.value)}>
-                    <option value="">— Tanpa PO —</option>
-                    {pos.filter((p) => !form.vendorId || p.vendorId === form.vendorId).map((p) => <option key={p.id} value={p.id}>{p.number}</option>)}
-                  </select>
+                <Field label="No. Purchase Order (PO)">
+                  <DocNumberInput
+                    docs={poOptions}
+                    value={form.poId}
+                    onResolve={(id) => (id ? pickPo(id) : setForm((f) => ({ ...f, poId: '', prId: spks.find((x) => x.id === f.spkId)?.prId ?? '' })))}
+                    placeholder="Contoh: PO/2026/00001"
+                  />
                 </Field>
-                <Field label="BAST / Goods Receipt">
-                  <select className={cn('input', ocrCls('grId'))} value={form.grId} onChange={(e) => set('grId', e.target.value)}>
-                    <option value="">— Belum ada —</option>
-                    {grs.filter((g) => (form.spkId && g.spkId === form.spkId) || (form.poId && g.poId === form.poId)).map((g) => <option key={g.id} value={g.id}>{g.number} • {formatCompact(g.amount)}</option>)}
-                  </select>
+                <Field label="No. BAST / Goods Receipt">
+                  <DocNumberInput docs={grOptions} value={form.grId} onResolve={(id) => set('grId', id)} placeholder="Contoh: BAST/2026/0007" />
                 </Field>
               </div>
 

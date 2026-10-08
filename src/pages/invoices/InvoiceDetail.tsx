@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Ban, CheckCircle2, ClipboardCheck, FileText, History, Link2, PlayCircle, Save, ScanLine } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { matchInvoice, matchSummary } from '@/lib/calc'
+import { matchInvoice, matchSummary, poValue } from '@/lib/calc'
 import { daysOverdue } from '@/lib/dates'
 import { formatDate, formatDateTime, formatIDR, terbilangRupiah } from '@/lib/format'
 import { Badge, Button, Card, DescList, EmptyState, Field, Modal, PageHeader, StatusBadge } from '@/components/ui'
 import { DocumentTrail } from '@/components/ap/DocumentTrail'
 import { MatchPanel } from '@/components/ap/MatchPanel'
 import { AttachmentPanel } from '@/components/ap/AttachmentPanel'
+import { DocNumberInput } from '@/components/docs/DocNumberInput'
 
 export default function InvoiceDetail() {
   const { id } = useParams()
@@ -225,23 +226,30 @@ export default function InvoiceDetail() {
         }
       >
         <div className="space-y-4">
-          <Field label="SPK">
-            <select className="input" value={ref.spkId} onChange={(e) => setRef({ ...ref, spkId: e.target.value, poId: spks.find((s) => s.id === e.target.value)?.poId ?? ref.poId })}>
-              <option value="">— Tanpa SPK —</option>
-              {spks.filter((s) => s.vendorId === inv.vendorId).map((s) => <option key={s.id} value={s.id}>{s.number} — {s.title}</option>)}
-            </select>
+          <p className="text-xs text-slate-500">Ketik nomor dokumen — data akan terbaca otomatis.</p>
+          <Field label="No. SPK">
+            <DocNumberInput
+              docs={spks.map((x) => ({ id: x.id, number: x.number, detail: `${x.title} • ${vendors.find((v) => v.id === x.vendorId)?.name ?? ''}` }))}
+              value={ref.spkId}
+              onResolve={(id) => setRef((r) => ({ ...r, spkId: id, poId: spks.find((x) => x.id === id)?.poId ?? r.poId }))}
+              placeholder="Contoh: SPK/2026/NMS/001"
+            />
           </Field>
-          <Field label="PO">
-            <select className="input" value={ref.poId} onChange={(e) => setRef({ ...ref, poId: e.target.value })}>
-              <option value="">— Tanpa PO —</option>
-              {pos.filter((p) => p.vendorId === inv.vendorId).map((p) => <option key={p.id} value={p.id}>{p.number}</option>)}
-            </select>
+          <Field label="No. PO">
+            <DocNumberInput
+              docs={pos.map((x) => ({ id: x.id, number: x.number, detail: `${vendors.find((v) => v.id === x.vendorId)?.name ?? ''} • ${formatIDR(poValue(x))}` }))}
+              value={ref.poId}
+              onResolve={(id) => setRef((r) => ({ ...r, poId: id }))}
+              placeholder="Contoh: PO/2026/00001"
+            />
           </Field>
-          <Field label="BAST / GR">
-            <select className="input" value={ref.grId} onChange={(e) => setRef({ ...ref, grId: e.target.value })}>
-              <option value="">— Belum ada —</option>
-              {grs.filter((g) => (ref.spkId && g.spkId === ref.spkId) || (ref.poId && g.poId === ref.poId)).map((g) => <option key={g.id} value={g.id}>{g.number} • {formatIDR(g.amount)}</option>)}
-            </select>
+          <Field label="No. BAST / GR">
+            <DocNumberInput
+              docs={grs.map((g) => ({ id: g.id, number: g.number, detail: `${g.description} • ${formatIDR(g.amount)}` }))}
+              value={ref.grId}
+              onResolve={(id) => setRef((r) => ({ ...r, grId: id }))}
+              placeholder="Contoh: BAST/2026/0007"
+            />
           </Field>
           <Field label="No. Faktur Pajak">
             <input className="input font-mono" value={ref.fakturPajakNo} onChange={(e) => setRef({ ...ref, fakturPajakNo: e.target.value })} />
