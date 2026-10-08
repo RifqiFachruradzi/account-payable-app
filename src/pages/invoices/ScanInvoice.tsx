@@ -168,7 +168,7 @@ export default function ScanInvoice() {
       setRawText(res.text)
       setConfidence(res.confidence)
       setMethod(res.method)
-      applyParsed(parseInvoiceText(res.text, { companyNpwp: settings.companyNpwp }))
+      applyParsed(parseInvoiceText(res.text, { companyNpwp: settings.companyNpwp, companyName: settings.companyName }))
       setStage('review')
     } catch (e) {
       console.error(e)

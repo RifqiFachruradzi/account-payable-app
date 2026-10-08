@@ -212,24 +212,86 @@ function titleCase(v: string) {
     .replace(/\b(Pt|Cv|Ud|Tbk)\b/g, (m) => m.toUpperCase())
 }
 
-export function parseInvoiceText(raw: string, opts: { companyNpwp?: string } = {}): ParsedInvoice {
+/** Inti nama badan usaha untuk perbandingan: tanpa PT/CV/Tbk & tanda baca */
+function coreName(v: string) {
+  return v
+    .toLowerCase()
+    .replace(/\b(pt|cv|ud|tbk|persero|koperasi)\b\.?/g, ' ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+/** ≥ 2/3 kata sama — toleran terhadap salah baca OCR satu kata */
+function similarWords(a: string, b: string) {
+  const A = a.split(' ').filter((w) => w.length > 2)
+  const B = new Set(b.split(' ').filter((w) => w.length > 2))
+  if (A.length < 2 || B.size < 2) return false
+  return A.filter((w) => B.has(w)).length / Math.max(A.length, B.size) >= 0.66
+}
+
+export function parseInvoiceText(raw: string, opts: { companyNpwp?: string; companyName?: string } = {}): ParsedInvoice {
   const text = raw.replace(/\r/g, '').replace(/[|]/g, ' ')
   const lines = text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean)
   const p: ParsedInvoice = { found: [] }
   const mark = (k: string) => !p.found.includes(k) && p.found.push(k)
 
-  // Nama vendor: baris pertama yang mengandung bentuk badan usaha
-  const vn = lines.find((l) => /\b(PT|CV|UD)\.?\s+[A-Z]/.test(l) && !/kepada|bill to|ditagihkan/i.test(l))
-  if (vn) {
-    p.vendorName = titleCase(
-      (vn.match(/\b(?:PT|CV|UD)\.?\s+[A-Za-z0-9 &.-]+/)?.[0] ?? '')
-        .replace(/\s+(INVOICE|FAKTUR|KWITANSI|TAGIHAN|NOTA)\b.*$/i, '')
+  // ---------------------------------------------------------------- Nama vendor
+  // Tagihan memuat 2 badan usaha: VENDOR (penerbit, biasanya di kop / tanda tangan / rekening)
+  // dan PERUSAHAAN KITA (penerima, di blok "Kepada Yth." / "Bill To"). Nama perusahaan sendiri
+  // tidak boleh terbaca sebagai vendor.
+  const companyCore = coreName(opts.companyName ?? '')
+  const isCompany = (name: string) => {
+    const c = coreName(name)
+    return !!companyCore && !!c && (c.includes(companyCore) || companyCore.includes(c) || similarWords(c, companyCore))
+  }
+  const extractName = (l: string) =>
+    titleCase(
+      (l.match(/\b(?:PT|CV|UD|Koperasi)\.?\s+[A-Za-z0-9 &.,'-]+/i)?.[0] ?? '')
+        // potong label kolom lain yang ikut terbaca dalam satu baris
+        .replace(/\s+(INVOICE|FAKTUR|KWITANSI|TAGIHAN|NOTA|Tanggal|Tgl|Date|No\.?|Nomor|NPWP|Telp|Jl\.|Jalan|Jatuh)\b.*$/i, '')
+        .replace(/[,.\s-]+$/, '')
         .trim(),
     )
+  const RECIPIENT = /(kepada|yth\b|bill\s*to|ship\s*to|ditujukan|ditagihkan|customer|pelanggan|pembeli|buyer|sold\s*to|penerima)/i
+  const recipientLines = new Set<number>()
+  lines.forEach((l, i) => {
+    if (!RECIPIENT.test(l)) return
+    // Blok penerima: baris label s.d. nama perusahaan kita (+1 baris alamat), maks. 3 baris berikutnya;
+    // berhenti di judul dokumen (INVOICE/FAKTUR) agar kop vendor di bawahnya tidak ikut terbuang
+    let end = Math.min(i + 3, lines.length - 1)
+    for (let k = i; k <= end; k++) {
+      if (k > i && /^(tax\s+)?(invoice|faktur|kwitansi|nota)\b/i.test(lines[k])) {
+        end = k - 1
+        break
+      }
+      if (isCompany(extractName(lines[k]) || lines[k])) {
+        end = Math.min(end, k + 1)
+        break
+      }
+    }
+    for (let k = i; k <= end; k++) recipientLines.add(k)
+  })
+  const candidates = lines
+    .map((l, i) => ({ l, i, name: extractName(l) }))
+    .filter((c) => c.name.split(' ').length >= 2 && !isCompany(c.name))
+  const vendorNpwpLine = lines.findIndex((l) => /npwp/i.test(l) && !(opts.companyNpwp && sameNPWP(l.replace(/\D/g, ''), opts.companyNpwp)) && !recipientLines.has(lines.indexOf(l)))
+  const signIdx = lines.findIndex((l) => /(hormat kami|regards|sincerely)/i.test(l))
+  const pick =
+    // 1) kop dokumen (bukan blok penerima)
+    candidates.find((c) => c.i < 8 && !recipientLines.has(c.i)) ??
+    // 2) dekat baris NPWP vendor
+    candidates.find((c) => vendorNpwpLine >= 0 && Math.abs(c.i - vendorNpwpLine) <= 3 && !recipientLines.has(c.i)) ??
+    // 3) nama pemilik rekening (a.n.)
+    candidates.find((c) => /\ba\.?\s?n\.?\s/i.test(c.l)) ??
+    // 4) blok tanda tangan
+    candidates.find((c) => signIdx >= 0 && c.i > signIdx) ??
+    candidates.find((c) => !recipientLines.has(c.i))
+  if (pick) {
+    p.vendorName = pick.name
     mark('vendorName')
-    // Baris sesudah nama vendor biasanya alamat
-    const next = lines[lines.indexOf(vn) + 1]
-    if (next && !/(telp|tel\.|phone|npwp|@|kepada|invoice)/i.test(next) && /[a-z]/i.test(next)) {
+    // Baris sesudah nama vendor (di kop) biasanya alamat
+    const next = lines[pick.i + 1]
+    if (pick.i < 8 && next && !recipientLines.has(pick.i + 1) && !/(telp|tel\.|phone|npwp|@|kepada|invoice)/i.test(next) && /[a-z]/i.test(next)) {
       // OCR kerap membaca "Jl." sebagai "JI." / "J1."
       p.vendorAddress = next.replace(/^(alamat|address)\s*:?\s*/i, '').replace(/\bJ[I1l]\.\s*/g, 'Jl. ')
       const parts = p.vendorAddress.split(',').map((x) => x.trim()).filter(Boolean)
@@ -243,7 +305,9 @@ export function parseInvoiceText(raw: string, opts: { companyNpwp?: string } = {
   const bank = text.match(/\bbank\s+(BCA|BNI|BRI|BSI|BTN|Mandiri|CIMB(?:\s+Niaga)?|Permata|Danamon|OCBC(?:\s+NISP)?|Maybank|Panin|Mega)\b/i)
   if (bank) p.bankName = bank[1].toUpperCase().length <= 4 ? bank[1].toUpperCase() : titleCase(bank[1])
   const an = text.match(/\ba\.?\s?n\.?\s+((?:PT|CV|UD)?\.?\s*[A-Za-z][A-Za-z0-9 &.,-]{2,60})/i)
-  if (an) p.bankAccountName = titleCase(an[1].trim())
+  if (an && !isCompany(an[1])) p.bankAccountName = titleCase(an[1].replace(/\s+(Bank|No\.?|Rek).*$/i, '').trim())
+  // Tanpa badan usaha di teks: pakai nama pemilik rekening sebagai nama vendor
+  if (!p.vendorName && p.bankAccountName) (p.vendorName = p.bankAccountName), mark('vendorName')
 
   // NPWP — abaikan NPWP perusahaan sendiri
   const npwps = [...text.matchAll(/\b(\d{2}[.\s]?\d{3}[.\s]?\d{3}[.\s]?\d[-.\s]?\d{3}[.\s]?\d{3}|\d{4}\s?\d{4}\s?\d{4}\s?\d{4})\b/g)].map((m) => m[1])
