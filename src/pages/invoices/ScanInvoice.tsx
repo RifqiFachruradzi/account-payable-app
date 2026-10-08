@@ -36,9 +36,17 @@ import { Badge, Button, Card, Field, PageHeader, StatusBadge } from '@/component
 import { MatchPanel } from '@/components/ap/MatchPanel'
 import { VendorFormModal } from '@/pages/vendors/VendorForm'
 import { cn } from '@/lib/cn'
-import type { AttachmentCategory, Invoice } from '@/types'
+import type { AttachmentCategory, Invoice, Vendor } from '@/types'
 
 type Stage = 'upload' | 'processing' | 'review'
+
+/** Vendor fiktif untuk contoh tagihan dari vendor yang belum terdaftar */
+const UNREGISTERED_VENDOR: Vendor = {
+  id: 'sample-new', code: 'VND-BARU', name: 'PT Mega Daya Teknik', legalForm: 'PT', npwp: '02.987.654.3-021.000', isPkp: true,
+  category: 'Facility Management', address: 'Jl. Industri Raya Blok C No. 8', city: 'Bekasi', province: 'Jawa Barat', contactPerson: 'Hendro Wibowo',
+  phone: '021-89901234', email: 'finance@megadayateknik.co.id', bankName: 'Mandiri', bankAccountNo: '1560077889900', bankAccountName: 'PT Mega Daya Teknik',
+  paymentTermDays: 30, withholdingTax: 'PPh 23', status: 'Aktif', createdAt: '2026-01-01',
+}
 
 interface FormState {
   vendorId: string
@@ -89,6 +97,8 @@ export default function ScanInvoice() {
   const [ocrFilled, setOcrFilled] = useState<Set<keyof FormState>>(new Set())
   const [showRaw, setShowRaw] = useState(false)
   const [vendorModal, setVendorModal] = useState(false)
+  /** pengguna memilih untuk memilih vendor dari daftar meski OCR membaca vendor baru */
+  const [pickFromList, setPickFromList] = useState(false)
   const [error, setError] = useState('')
   const [drag, setDrag] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -109,6 +119,7 @@ export default function ScanInvoice() {
   const pr = prs.find((p) => p.id === form.prId)
   const gr = grs.find((g) => g.id === form.grId)
   const amounts = computeInvoiceAmounts(form.dpp, form.ppnRate, form.pphRate)
+  const unknownVendor = !form.vendorId && method !== 'Manual' && !pickFromList && !!(parsed.vendorName || parsed.npwp)
 
   // ---------------------------------------------------------------- samples
   const samples: (SampleSpec & { key: string })[] = useMemo(() => {
@@ -133,7 +144,12 @@ export default function ScanInvoice() {
       }
       list.push({ key: s.id, vendor: v, spk: s, po: poS, dpp, description: desc })
     }
-    return list.slice(0, 4)
+    const out = list.slice(0, 4)
+    // Contoh tagihan dari vendor yang BELUM terdaftar di Vendor Master
+    if (!vendors.some((v) => v.npwp === UNREGISTERED_VENDOR.npwp)) {
+      out.push({ key: 'new-vendor', vendor: UNREGISTERED_VENDOR, dpp: 18_500_000, description: 'Jasa servis & penggantian sparepart genset 500 kVA' })
+    }
+    return out
   }, [spks, pos, vendors, invoices])
 
   // ---------------------------------------------------------------- OCR
@@ -162,6 +178,7 @@ export default function ScanInvoice() {
   }
 
   const applyParsed = (p: ParsedInvoice) => {
+    setPickFromList(false)
     const r = resolveReferences(p, { vendors, spks, pos, grs, invoices })
     setParsed(p)
     setRefs(r)
@@ -216,6 +233,7 @@ export default function ScanInvoice() {
   }
 
   const reset = () => {
+    setPickFromList(false)
     setStage('upload')
     setSourceFile(null)
     setExtraFiles([])
@@ -395,7 +413,7 @@ export default function ScanInvoice() {
                       <span className="block truncate text-sm font-medium text-slate-800">{s.vendor.name}</span>
                       <span className="block truncate text-xs text-slate-500">{s.description}</span>
                       <span className="mt-1 flex items-center gap-2 text-xs">
-                        <span className="font-mono text-brand-700">{s.spk?.number}</span>
+                        {s.spk ? <span className="font-mono text-brand-700">{s.spk.number}</span> : <Badge tone="amber">Vendor belum terdaftar</Badge>}
                         <span className="font-semibold text-slate-700">{formatCompact(s.dpp)}</span>
                       </span>
                     </span>
@@ -484,19 +502,46 @@ export default function ScanInvoice() {
             <Card title="Data Tagihan" subtitle={method === 'Manual' ? 'Lengkapi data tagihan vendor' : 'Field hijau terisi otomatis — periksa & koreksi bila perlu'} icon={FileText}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Vendor" required className="sm:col-span-2">
-                  <div className="flex gap-2">
-                    <select className={cn('input', ocrCls('vendorId'))} value={form.vendorId} onChange={(e) => pickVendor(e.target.value)}>
-                      <option value="">— Pilih vendor —</option>
-                      {vendors.filter((v) => v.status !== 'Blacklist').map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                    </select>
-                    <Button variant="secondary" icon={UserPlus} onClick={() => setVendorModal(true)} title="Daftarkan vendor baru" />
-                  </div>
-                  {vendor && <p className="mt-1.5 text-xs text-slate-600">NPWP <span className="font-mono font-medium text-slate-800">{vendor.npwp}</span></p>}
-                  {refs.vendorBy && form.vendorId === refs.vendorId && (
-                    <p className="mt-1 flex items-center gap-1 text-xs text-emerald-700"><Sparkles className="size-3" /> Vendor dikenali otomatis berdasarkan {refs.vendorBy}</p>
-                  )}
-                  {!form.vendorId && parsed.npwp && (
-                    <p className="mt-1 text-xs text-amber-700">NPWP <b className="font-mono">{formatNPWP(parsed.npwp)}</b>{parsed.vendorName ? ` (${parsed.vendorName})` : ''} belum terdaftar di Vendor Master.</p>
+                  {unknownVendor ? (
+                    <>
+                      <div className="input flex h-auto min-h-9 items-center gap-2 border-amber-300 bg-amber-50/60 py-1.5">
+                        <Sparkles className="size-4 shrink-0 text-amber-600" />
+                        <span className="min-w-0 flex-1 font-medium text-slate-900">{parsed.vendorName || 'Nama vendor tidak terbaca'}</span>
+                        <Badge tone="amber">Belum terdaftar</Badge>
+                      </div>
+                      {parsed.npwp && (
+                        <p className="mt-1.5 text-xs text-slate-600">NPWP <span className="font-mono font-medium text-slate-800">{formatNPWP(parsed.npwp)}</span> <span className="text-slate-400">(hasil OCR)</span></p>
+                      )}
+                      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <span className="relative">
+                          <Button icon={UserPlus} onClick={() => setVendorModal(true)} className="ring-4 ring-brand-500/20">
+                            Daftarkan Vendor Baru
+                          </Button>
+                          <span className="pointer-events-none absolute -right-1 -top-1 flex size-3">
+                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                            <span className="relative inline-flex size-3 rounded-full bg-amber-500" />
+                          </span>
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          Data vendor terisi otomatis dari OCR, atau{' '}
+                          <button type="button" onClick={() => setPickFromList(true)} className="font-medium text-brand-600 hover:underline">pilih dari daftar vendor</button>
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex gap-2">
+                        <select className={cn('input', ocrCls('vendorId'))} value={form.vendorId} onChange={(e) => pickVendor(e.target.value)}>
+                          <option value="">— Pilih vendor —</option>
+                          {vendors.filter((v) => v.status !== 'Blacklist').map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        </select>
+                        <Button variant="secondary" icon={UserPlus} onClick={() => setVendorModal(true)} title="Daftarkan vendor baru" />
+                      </div>
+                      {vendor && <p className="mt-1.5 text-xs text-slate-600">NPWP <span className="font-mono font-medium text-slate-800">{vendor.npwp}</span></p>}
+                      {refs.vendorBy && form.vendorId === refs.vendorId && (
+                        <p className="mt-1 flex items-center gap-1 text-xs text-emerald-700"><Sparkles className="size-3" /> Vendor dikenali otomatis berdasarkan {refs.vendorBy}</p>
+                      )}
+                    </>
                   )}
                 </Field>
                 <Field label={`No. Invoice Vendor`} required>
@@ -658,7 +703,20 @@ export default function ScanInvoice() {
       <VendorFormModal
         open={vendorModal}
         onClose={() => setVendorModal(false)}
-        initial={{ name: parsed.vendorName ?? '', npwp: parsed.npwp ? formatNPWP(parsed.npwp) : '', bankAccountNo: parsed.bankAccountNo ?? '' }}
+        initial={{
+          name: parsed.vendorName ?? '',
+          legalForm: (parsed.vendorName?.match(/^(PT|CV|UD)\b/)?.[1] as Vendor['legalForm']) ?? 'PT',
+          npwp: parsed.npwp ? formatNPWP(parsed.npwp) : '',
+          address: parsed.vendorAddress?.split(',').slice(0, -1).join(',').trim() || parsed.vendorAddress || '',
+          city: parsed.vendorCity ?? '',
+          phone: parsed.vendorPhone ?? '',
+          email: parsed.vendorEmail ?? '',
+          isPkp: !!parsed.ppn || !!parsed.fakturPajakNo,
+          ...(parsed.bankName ? { bankName: parsed.bankName } : {}),
+          bankAccountNo: parsed.bankAccountNo ?? '',
+          bankAccountName: parsed.bankAccountName ?? parsed.vendorName ?? '',
+          notes: 'Didaftarkan dari hasil scan OCR tagihan',
+        }}
         onSaved={(v) => pickVendor(v.id)}
       />
     </div>

@@ -140,6 +140,12 @@ async function preprocess(src: string) {
 
 export interface ParsedInvoice {
   vendorName?: string
+  vendorAddress?: string
+  vendorCity?: string
+  vendorPhone?: string
+  vendorEmail?: string
+  bankName?: string
+  bankAccountName?: string
   npwp?: string
   invoiceNo?: string
   invoiceDate?: string
@@ -197,6 +203,15 @@ const lastAmountInLine = (line: string) => {
   return undefined
 }
 
+/** "PT MEGA DAYA TEKNIK" → "PT Mega Daya Teknik" (hanya bila seluruhnya kapital) */
+function titleCase(v: string) {
+  if (v !== v.toUpperCase()) return v
+  return v
+    .toLowerCase()
+    .replace(/\b([a-z])/g, (m) => m.toUpperCase())
+    .replace(/\b(Pt|Cv|Ud|Tbk)\b/g, (m) => m.toUpperCase())
+}
+
 export function parseInvoiceText(raw: string, opts: { companyNpwp?: string } = {}): ParsedInvoice {
   const text = raw.replace(/\r/g, '').replace(/[|]/g, ' ')
   const lines = text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean)
@@ -206,9 +221,29 @@ export function parseInvoiceText(raw: string, opts: { companyNpwp?: string } = {
   // Nama vendor: baris pertama yang mengandung bentuk badan usaha
   const vn = lines.find((l) => /\b(PT|CV|UD)\.?\s+[A-Z]/.test(l) && !/kepada|bill to|ditagihkan/i.test(l))
   if (vn) {
-    p.vendorName = vn.match(/\b(?:PT|CV|UD)\.?\s+[A-Za-z0-9 &.-]+/)?.[0].trim()
+    p.vendorName = titleCase(
+      (vn.match(/\b(?:PT|CV|UD)\.?\s+[A-Za-z0-9 &.-]+/)?.[0] ?? '')
+        .replace(/\s+(INVOICE|FAKTUR|KWITANSI|TAGIHAN|NOTA)\b.*$/i, '')
+        .trim(),
+    )
     mark('vendorName')
+    // Baris sesudah nama vendor biasanya alamat
+    const next = lines[lines.indexOf(vn) + 1]
+    if (next && !/(telp|tel\.|phone|npwp|@|kepada|invoice)/i.test(next) && /[a-z]/i.test(next)) {
+      // OCR kerap membaca "Jl." sebagai "JI." / "J1."
+      p.vendorAddress = next.replace(/^(alamat|address)\s*:?\s*/i, '').replace(/\bJ[I1l]\.\s*/g, 'Jl. ')
+      const parts = p.vendorAddress.split(',').map((x) => x.trim()).filter(Boolean)
+      if (parts.length > 1) p.vendorCity = parts[parts.length - 1]
+    }
   }
+  const phone = text.match(/(?:telp|tel|phone|hp|telepon)\.?\s*:?\s*(\+?[\d][\d\s\-()]{6,}\d)/i)
+  if (phone) p.vendorPhone = phone[1].trim()
+  const email = text.match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/)
+  if (email) p.vendorEmail = email[0].toLowerCase()
+  const bank = text.match(/\bbank\s+(BCA|BNI|BRI|BSI|BTN|Mandiri|CIMB(?:\s+Niaga)?|Permata|Danamon|OCBC(?:\s+NISP)?|Maybank|Panin|Mega)\b/i)
+  if (bank) p.bankName = bank[1].toUpperCase().length <= 4 ? bank[1].toUpperCase() : titleCase(bank[1])
+  const an = text.match(/\ba\.?\s?n\.?\s+((?:PT|CV|UD)?\.?\s*[A-Za-z][A-Za-z0-9 &.,-]{2,60})/i)
+  if (an) p.bankAccountName = titleCase(an[1].trim())
 
   // NPWP — abaikan NPWP perusahaan sendiri
   const npwps = [...text.matchAll(/\b(\d{2}[.\s]?\d{3}[.\s]?\d{3}[.\s]?\d[-.\s]?\d{3}[.\s]?\d{3}|\d{4}\s?\d{4}\s?\d{4}\s?\d{4})\b/g)].map((m) => m[1])
