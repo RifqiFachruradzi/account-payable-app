@@ -25,7 +25,7 @@ import {
 import { useCurrentUser, useStore } from '@/store/useStore'
 import { dataUrlToBlob, formatBytes, putFile } from '@/lib/attachmentStore'
 import { uid } from '@/lib/id'
-import { parseInvoiceText, runOcr, type OcrProgress, type ParsedInvoice } from '@/lib/ocr'
+import { coreName, parseInvoiceText, runOcr, type OcrProgress, type ParsedInvoice, type VendorSource } from '@/lib/ocr'
 import { resolveReferences, type ResolvedRefs } from '@/lib/resolve'
 import { renderSampleInvoice, type SampleSpec } from '@/lib/sampleInvoice'
 import { computeInvoiceAmounts, matchInvoice, matchSummary, poValue, pphRateFor, spkBilled } from '@/lib/calc'
@@ -39,6 +39,14 @@ import { cn } from '@/lib/cn'
 import type { AttachmentCategory, Invoice, Vendor } from '@/types'
 
 type Stage = 'upload' | 'processing' | 'review'
+
+const SOURCE_LABEL: Record<VendorSource, string> = {
+  'Kop Invoice': 'Kop',
+  'Tanda Tangan / Stempel': 'TTD / Stempel',
+  'Rekening (a.n.)': 'Rekening a.n.',
+  'Dekat NPWP': 'NPWP',
+  'Isi Dokumen': 'Isi dokumen',
+}
 
 /** Vendor fiktif untuk contoh tagihan dari vendor yang belum terdaftar */
 const UNREGISTERED_VENDOR: Vendor = {
@@ -99,6 +107,8 @@ export default function ScanInvoice() {
   const [vendorModal, setVendorModal] = useState(false)
   /** pengguna memilih untuk memilih vendor dari daftar meski OCR membaca vendor baru */
   const [pickFromList, setPickFromList] = useState(false)
+  /** nama vendor hasil OCR yang dapat dikoreksi pengguna */
+  const [vendorName, setVendorName] = useState('')
   const [error, setError] = useState('')
   const [drag, setDrag] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -119,7 +129,13 @@ export default function ScanInvoice() {
   const pr = prs.find((p) => p.id === form.prId)
   const gr = grs.find((g) => g.id === form.grId)
   const amounts = computeInvoiceAmounts(form.dpp, form.ppnRate, form.pphRate)
-  const unknownVendor = !form.vendorId && method !== 'Manual' && !pickFromList && !!(parsed.vendorName || parsed.npwp)
+  const unknownVendor = !form.vendorId && method !== 'Manual' && !pickFromList && !!(parsed.vendorName || parsed.npwp || parsed.vendorCandidates?.length)
+  // Nama yang diketik / dikoreksi dicocokkan ulang ke Vendor Master
+  const nameMatch = useMemo(() => {
+    const k = coreName(vendorName)
+    if (k.length < 4) return undefined
+    return vendors.find((v) => coreName(v.name) === k) ?? vendors.find((v) => coreName(v.name).includes(k) || k.includes(coreName(v.name)))
+  }, [vendorName, vendors])
 
   // ---------------------------------------------------------------- samples
   const samples: (SampleSpec & { key: string })[] = useMemo(() => {
@@ -147,7 +163,7 @@ export default function ScanInvoice() {
     const out = list.slice(0, 4)
     // Contoh tagihan dari vendor yang BELUM terdaftar di Vendor Master
     if (!vendors.some((v) => v.npwp === UNREGISTERED_VENDOR.npwp)) {
-      out.push({ key: 'new-vendor', vendor: UNREGISTERED_VENDOR, dpp: 18_500_000, description: 'Jasa servis & penggantian sparepart genset 500 kVA' })
+      out.push({ key: 'new-vendor', vendor: UNREGISTERED_VENDOR, dpp: 18_500_000, description: 'Jasa servis & penggantian sparepart genset 500 kVA', logoOnly: true })
     }
     return out
   }, [spks, pos, vendors, invoices])
@@ -168,7 +184,7 @@ export default function ScanInvoice() {
       setRawText(res.text)
       setConfidence(res.confidence)
       setMethod(res.method)
-      applyParsed(parseInvoiceText(res.text, { companyNpwp: settings.companyNpwp, companyName: settings.companyName }))
+      applyParsed(parseInvoiceText(res.text, { companyNpwp: settings.companyNpwp, companyName: settings.companyName, regions: res.regions }))
       setStage('review')
     } catch (e) {
       console.error(e)
@@ -179,6 +195,7 @@ export default function ScanInvoice() {
 
   const applyParsed = (p: ParsedInvoice) => {
     setPickFromList(false)
+    setVendorName(p.vendorName ?? '')
     const r = resolveReferences(p, { vendors, spks, pos, grs, invoices })
     setParsed(p)
     setRefs(r)
@@ -234,6 +251,7 @@ export default function ScanInvoice() {
 
   const reset = () => {
     setPickFromList(false)
+    setVendorName('')
     setStage('upload')
     setSourceFile(null)
     setExtraFiles([])
@@ -504,11 +522,47 @@ export default function ScanInvoice() {
                 <Field label="Vendor" required className="sm:col-span-2">
                   {unknownVendor ? (
                     <>
-                      <div className="input flex h-auto min-h-9 items-center gap-2 border-amber-300 bg-amber-50/60 py-1.5">
-                        <Sparkles className="size-4 shrink-0 text-amber-600" />
-                        <span className="min-w-0 flex-1 font-medium text-slate-900">{parsed.vendorName || 'Nama vendor tidak terbaca'}</span>
-                        <Badge tone="amber">Belum terdaftar</Badge>
+                      <div className="relative">
+                        <Sparkles className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-amber-600" />
+                        <input
+                          className="input border-amber-300 bg-amber-50/60 pl-9 pr-28 font-medium text-slate-900"
+                          value={vendorName}
+                          onChange={(e) => setVendorName(e.target.value)}
+                          placeholder="Ketik nama vendor sesuai invoice"
+                          aria-label="Nama vendor hasil scan"
+                        />
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2">
+                          <Badge tone="amber">{nameMatch ? 'Cocok' : 'Belum terdaftar'}</Badge>
+                        </span>
                       </div>
+                      <p className="mt-1 flex items-center gap-1 text-xs text-slate-500"><PencilLine className="size-3" /> Nama hasil scan dapat diedit bila masih salah</p>
+                      {!!parsed.vendorCandidates?.length && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs text-slate-500">Saran dari dokumen:</span>
+                          {parsed.vendorCandidates.map((c) => (
+                            <button
+                              key={c.name}
+                              type="button"
+                              onClick={() => setVendorName(c.name)}
+                              className={cn(
+                                'inline-flex flex-wrap items-center gap-1 rounded-md border px-2 py-1 text-left text-xs transition',
+                                c.name === vendorName ? 'border-brand-500 bg-brand-50 text-brand-800' : 'border-line bg-white text-slate-700 hover:border-brand-300',
+                              )}
+                            >
+                              <span className="mr-0.5 whitespace-nowrap font-medium">{c.name}</span>
+                              {c.sources.map((src) => (
+                                <span key={src} className="whitespace-nowrap rounded bg-slate-100 px-1 text-slate-500">{SOURCE_LABEL[src]}</span>
+                              ))}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {nameMatch && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                          <CheckCircle2 className="size-3.5" /> Nama cocok dengan vendor terdaftar <b>{nameMatch.name}</b> ({nameMatch.npwp})
+                          <Button size="sm" variant="success" className="ml-auto" onClick={() => pickVendor(nameMatch.id)}>Gunakan vendor ini</Button>
+                        </div>
+                      )}
                       {parsed.npwp && (
                         <p className="mt-1.5 text-xs text-slate-600">NPWP <span className="font-mono font-medium text-slate-800">{formatNPWP(parsed.npwp)}</span> <span className="text-slate-400">(hasil OCR)</span></p>
                       )}
@@ -704,8 +758,8 @@ export default function ScanInvoice() {
         open={vendorModal}
         onClose={() => setVendorModal(false)}
         initial={{
-          name: parsed.vendorName ?? '',
-          legalForm: (parsed.vendorName?.match(/^(PT|CV|UD)\b/)?.[1] as Vendor['legalForm']) ?? 'PT',
+          name: vendorName || parsed.vendorName || '',
+          legalForm: ((vendorName || parsed.vendorName || '').match(/^(PT|CV|UD)\b/i)?.[1]?.toUpperCase() as Vendor['legalForm']) ?? 'PT',
           npwp: parsed.npwp ? formatNPWP(parsed.npwp) : '',
           address: parsed.vendorAddress?.split(',').slice(0, -1).join(',').trim() || parsed.vendorAddress || '',
           city: parsed.vendorCity ?? '',
@@ -714,7 +768,7 @@ export default function ScanInvoice() {
           isPkp: !!parsed.ppn || !!parsed.fakturPajakNo,
           ...(parsed.bankName ? { bankName: parsed.bankName } : {}),
           bankAccountNo: parsed.bankAccountNo ?? '',
-          bankAccountName: parsed.bankAccountName ?? parsed.vendorName ?? '',
+          bankAccountName: parsed.bankAccountName ?? (vendorName || parsed.vendorName || ''),
           notes: 'Didaftarkan dari hasil scan OCR tagihan',
         }}
         onSaved={(v) => pickVendor(v.id)}

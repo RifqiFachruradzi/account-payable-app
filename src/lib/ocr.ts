@@ -11,6 +11,7 @@ export interface OcrResult {
   confidence: number
   imageDataUrl: string // preview (dikompres)
   method: 'OCR' | 'PDF Text'
+  regions?: OcrRegions
 }
 
 /** Kompres gambar agar ringan disimpan sebagai lampiran */
@@ -45,7 +46,7 @@ const readAsDataURL = (f: Blob) =>
   })
 
 /** Render halaman pertama PDF; jika PDF digital, ambil text layer langsung */
-async function readPdf(file: File): Promise<{ image: string; text: string }> {
+async function readPdf(file: File): Promise<{ image: string; text: string; regions: OcrRegions }> {
   const pdfjs = await import('pdfjs-dist')
   const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
@@ -65,11 +66,16 @@ async function readPdf(file: File): Promise<{ image: string; text: string }> {
     if (!lines.has(y)) lines.set(y, [])
     lines.get(y)!.push({ x: it.transform[4], s: it.str })
   }
-  const text = [...lines.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([, l]) => l.sort((a, b) => a.x - b.x).map((p) => p.s).join(' '))
-    .join('\n')
-  return { image: canvas.toDataURL('image/png'), text }
+  const h = page.getViewport({ scale: 1 }).height
+  const join = (pred: (y: number) => boolean) =>
+    [...lines.entries()]
+      .filter(([y]) => pred(y))
+      .sort((a, b) => b[0] - a[0])
+      .map(([, l]) => l.sort((a, b) => a.x - b.x).map((p) => p.s).join(' '))
+      .join('\n')
+  const text = join(() => true)
+  // koordinat PDF: y dihitung dari bawah halaman
+  return { image: canvas.toDataURL('image/png'), text, regions: { header: join((y) => y > h * 0.75), footer: join((y) => y < h * 0.45) } }
 }
 
 export async function runOcr(input: File | string, onProgress: (p: OcrProgress) => void): Promise<OcrResult> {
@@ -79,7 +85,7 @@ export async function runOcr(input: File | string, onProgress: (p: OcrProgress) 
     const pdf = await readPdf(input)
     if (pdf.text.replace(/\s/g, '').length > 80) {
       onProgress({ status: 'Teks PDF digital terbaca', progress: 1 })
-      return { text: pdf.text, confidence: 99, imageDataUrl: await compressImage(pdf.image), method: 'PDF Text' }
+      return { text: pdf.text, confidence: 99, imageDataUrl: await compressImage(pdf.image), method: 'PDF Text', regions: pdf.regions }
     }
     source = pdf.image
   } else {
@@ -89,6 +95,13 @@ export async function runOcr(input: File | string, onProgress: (p: OcrProgress) 
   onProgress({ status: 'Memuat mesin OCR', progress: 0.02 })
   const { createWorker } = await import('tesseract.js')
   const base = `${import.meta.env.BASE_URL}tesseract`
+  // fase: 0 = seluruh halaman, 1 = kop, 2 = tanda tangan & stempel
+  let phase = 0
+  const PHASES = [
+    { from: 0.3, span: 0.5, label: 'Membaca teks dokumen' },
+    { from: 0.8, span: 0.08, label: 'Membaca kop invoice' },
+    { from: 0.88, span: 0.12, label: 'Membaca tanda tangan & stempel' },
+  ]
   const worker = await createWorker('eng', 1, {
     workerPath: `${base}/worker.min.js`,
     corePath: `${base}/core`,
@@ -101,14 +114,33 @@ export async function runOcr(input: File | string, onProgress: (p: OcrProgress) 
         'initializing api': 'Menyiapkan pembaca',
         'recognizing text': 'Membaca teks dokumen',
       }
-      onProgress({ status: label[m.status] ?? m.status, progress: m.status === 'recognizing text' ? 0.3 + m.progress * 0.7 : m.progress * 0.3 })
+      if (m.status === 'recognizing text') {
+        const ph = PHASES[phase]
+        onProgress({ status: ph.label, progress: ph.from + m.progress * ph.span })
+      } else onProgress({ status: label[m.status] ?? m.status, progress: m.progress * 0.3 })
     },
   })
   try {
     // Pra-proses: grayscale + kontras agar hasil foto lebih terbaca
     const prepped = await preprocess(source)
     const { data } = await worker.recognize(prepped)
-    return { text: data.text, confidence: Math.round(data.confidence), imageDataUrl: await compressImage(source), method: 'OCR' }
+    // Baca ulang per area agar nama vendor di kop / tanda tangan / stempel lebih akurat
+    const regions: OcrRegions = {}
+    try {
+      const img = await loadImage(prepped)
+      const W = img.width
+      const H = img.height
+      phase = 1
+      regions.header = (await worker.recognize(prepped, { rectangle: { left: 0, top: 0, width: W, height: Math.round(H * 0.25) } })).data.text
+      phase = 2
+      // mode 11 (sparse text): teks tersebar/miring seperti stempel & tanda tangan
+      await worker.setParameters({ tessedit_pageseg_mode: '11' as never })
+      const top = Math.round(H * 0.55)
+      regions.footer = (await worker.recognize(prepped, { rectangle: { left: 0, top, width: W, height: H - top } })).data.text
+    } catch (e) {
+      console.warn('OCR per area gagal', e)
+    }
+    return { text: data.text, confidence: Math.round(data.confidence), imageDataUrl: await compressImage(source), method: 'OCR', regions }
   } finally {
     await worker.terminate()
   }
@@ -138,6 +170,21 @@ async function preprocess(src: string) {
 // Parser hasil OCR → field tagihan
 // ------------------------------------------------------------------
 
+export type VendorSource = 'Kop Invoice' | 'Tanda Tangan / Stempel' | 'Rekening (a.n.)' | 'Dekat NPWP' | 'Isi Dokumen'
+export interface VendorCandidate {
+  name: string
+  /** bagian dokumen tempat nama ini terbaca — makin banyak, makin meyakinkan */
+  sources: VendorSource[]
+}
+
+/** Teks OCR per area dokumen */
+export interface OcrRegions {
+  header?: string // ±25% bagian atas (kop)
+  footer?: string // ±45% bagian bawah (tanda tangan & stempel)
+}
+
+const splitLines = (t: string) => t.replace(/\r/g, '').replace(/[|]/g, ' ').split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean)
+
 export interface ParsedInvoice {
   vendorName?: string
   vendorAddress?: string
@@ -160,6 +207,8 @@ export interface ParsedInvoice {
   total?: number
   bankAccountNo?: string
   description?: string
+  /** kandidat nama vendor beserta asal bacaannya (urut prioritas) */
+  vendorCandidates?: VendorCandidate[]
   found: string[] // key field yang berhasil dibaca
 }
 
@@ -212,8 +261,16 @@ function titleCase(v: string) {
     .replace(/\b(Pt|Cv|Ud|Tbk)\b/g, (m) => m.toUpperCase())
 }
 
+function levenshtein(a: string, b: string) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)])
+  for (let j = 1; j <= b.length; j++) d[0][j] = j
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+  return d[a.length][b.length]
+}
+
 /** Inti nama badan usaha untuk perbandingan: tanpa PT/CV/Tbk & tanda baca */
-function coreName(v: string) {
+export function coreName(v: string) {
   return v
     .toLowerCase()
     .replace(/\b(pt|cv|ud|tbk|persero|koperasi)\b\.?/g, ' ')
@@ -229,7 +286,7 @@ function similarWords(a: string, b: string) {
   return A.filter((w) => B.has(w)).length / Math.max(A.length, B.size) >= 0.66
 }
 
-export function parseInvoiceText(raw: string, opts: { companyNpwp?: string; companyName?: string } = {}): ParsedInvoice {
+export function parseInvoiceText(raw: string, opts: { companyNpwp?: string; companyName?: string; regions?: OcrRegions } = {}): ParsedInvoice {
   const text = raw.replace(/\r/g, '').replace(/[|]/g, ' ')
   const lines = text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean)
   const p: ParsedInvoice = { found: [] }
@@ -253,45 +310,111 @@ export function parseInvoiceText(raw: string, opts: { companyNpwp?: string; comp
         .trim(),
     )
   const RECIPIENT = /(kepada|yth\b|bill\s*to|ship\s*to|ditujukan|ditagihkan|customer|pelanggan|pembeli|buyer|sold\s*to|penerima)/i
-  const recipientLines = new Set<number>()
-  lines.forEach((l, i) => {
-    if (!RECIPIENT.test(l)) return
-    // Blok penerima: baris label s.d. nama perusahaan kita (+1 baris alamat), maks. 3 baris berikutnya;
-    // berhenti di judul dokumen (INVOICE/FAKTUR) agar kop vendor di bawahnya tidak ikut terbuang
-    let end = Math.min(i + 3, lines.length - 1)
-    for (let k = i; k <= end; k++) {
-      if (k > i && /^(tax\s+)?(invoice|faktur|kwitansi|nota)\b/i.test(lines[k])) {
-        end = k - 1
-        break
+  /** Indeks baris yang termasuk blok penerima ("Kepada Yth." dst.) */
+  const recipientSet = (ls: string[]) => {
+    const set = new Set<number>()
+    ls.forEach((l, i) => {
+      if (!RECIPIENT.test(l)) return
+      // s.d. nama perusahaan kita (+1 baris alamat), maks. 3 baris; berhenti di judul INVOICE/FAKTUR
+      let end = Math.min(i + 3, ls.length - 1)
+      for (let k = i; k <= end; k++) {
+        if (k > i && /^(tax\s+)?(invoice|faktur|kwitansi|nota)\b/i.test(ls[k])) {
+          end = k - 1
+          break
+        }
+        if (isCompany(extractName(ls[k]) || ls[k])) {
+          end = Math.min(end, k + 1)
+          break
+        }
       }
-      if (isCompany(extractName(lines[k]) || lines[k])) {
-        end = Math.min(end, k + 1)
+      for (let k = i; k <= end; k++) set.add(k)
+    })
+    return set
+  }
+  const NOT_NAME = /\b(invoice|faktur|kwitansi|tagihan|nota|kepada|yth|tanggal|date|nomor|npwp|telp|phone|email|alamat|jl|jalan|total|jumlah|bank|rekening|hormat|kami|finance|direktur|director|manager|lampiran|terbilang|halaman|page)\b/i
+  /** Nama tanpa bentuk badan usaha (mis. logo teks "MEGA DAYA TEKNIK") — hanya dipakai di kop */
+  const upperName = (l: string) => {
+    const t = l.replace(/[^A-Za-z&.' -]/g, ' ').replace(/\s+/g, ' ').trim()
+    const words = t.split(' ').filter((w) => w.length > 1)
+    if (words.length < 2 || words.length > 6 || NOT_NAME.test(t)) return ''
+    // saring noise OCR dari logo/gambar: minimal 2 kata ≥ 4 huruf yang mengandung vokal & konsonan
+    const real = words.filter((w) => w.length >= 4 && /[aiueo]/i.test(w) && /[^aiueo]/i.test(w) && !/(.)\1\1/i.test(w))
+    if (real.length < 2) return ''
+    return t === t.toUpperCase() ? titleCase(t) : ''
+  }
+  /** Rapikan nama: hapus pengulangan ("PT A B PT A B") & potongan huruf sisa di akhir */
+  const cleanName = (n: string) => {
+    let w = n.replace(/\s+/g, ' ').trim().split(' ')
+    for (let k = Math.floor(w.length / 2); k >= 2; k--) {
+      if (w.slice(0, k).join(' ').toLowerCase() === w.slice(k, 2 * k).join(' ').toLowerCase()) {
+        w = w.slice(0, k)
         break
       }
     }
-    for (let k = i; k <= end; k++) recipientLines.add(k)
-  })
-  const candidates = lines
-    .map((l, i) => ({ l, i, name: extractName(l) }))
-    .filter((c) => c.name.split(' ').length >= 2 && !isCompany(c.name))
-  const vendorNpwpLine = lines.findIndex((l) => /npwp/i.test(l) && !(opts.companyNpwp && sameNPWP(l.replace(/\D/g, ''), opts.companyNpwp)) && !recipientLines.has(lines.indexOf(l)))
-  const signIdx = lines.findIndex((l) => /(hormat kami|regards|sincerely)/i.test(l))
-  const pick =
-    // 1) kop dokumen (bukan blok penerima)
-    candidates.find((c) => c.i < 8 && !recipientLines.has(c.i)) ??
-    // 2) dekat baris NPWP vendor
-    candidates.find((c) => vendorNpwpLine >= 0 && Math.abs(c.i - vendorNpwpLine) <= 3 && !recipientLines.has(c.i)) ??
-    // 3) nama pemilik rekening (a.n.)
-    candidates.find((c) => /\ba\.?\s?n\.?\s/i.test(c.l)) ??
-    // 4) blok tanda tangan
-    candidates.find((c) => signIdx >= 0 && c.i > signIdx) ??
-    candidates.find((c) => !recipientLines.has(c.i))
-  if (pick) {
-    p.vendorName = pick.name
+    while (w.length > 2 && w[w.length - 1].replace(/[^A-Za-z]/g, '').length <= 2 && !/^(&|dan)$/i.test(w[w.length - 1])) w.pop()
+    return titleCase(w.join(' '))
+  }
+
+  const candidates: VendorCandidate[] = []
+  const addCandidate = (raw: string | undefined, source: VendorSource) => {
+    if (!raw) return
+    const name = cleanName(raw)
+    if (name.split(' ').length < 2 || isCompany(name)) return
+    const key = coreName(name)
+    if (key.replace(/\s/g, '').length < 4) return
+    // gabungkan dengan kandidat yang sama / terpotong (mis. "PT Mega Da" ⊂ "PT Mega Daya Teknik")
+    const same = candidates.find((c) => {
+      const k = coreName(c.name)
+      if (k === key || k.startsWith(key) || key.startsWith(k)) return true
+      // salah baca 1–2 huruf: bandingkan dengan awalan sepanjang nama yang lebih pendek
+      const [short, long] = k.length < key.length ? [k, key] : [key, k]
+      return short.length >= 6 && levenshtein(short, long.slice(0, short.length)) <= Math.max(1, Math.floor(short.length * 0.25))
+    })
+    if (same) {
+      if (key.length > coreName(same.name).length) same.name = name
+      if (!same.sources.includes(source)) same.sources.push(source)
+      return
+    }
+    candidates.push({ name, sources: [source] })
+  }
+  const recipientLines = recipientSet(lines)
+  const named = lines.map((l, i) => ({ l, i, name: extractName(l) })).filter((c) => c.name)
+
+  // 1) Kop invoice (bagian atas dokumen)
+  const headerLines = opts.regions?.header ? splitLines(opts.regions.header) : lines.slice(0, 8)
+  const headerRecipient = opts.regions?.header ? recipientSet(headerLines) : recipientLines
+  headerLines.forEach((l, i) => !headerRecipient.has(i) && addCandidate(extractName(l), 'Kop Invoice'))
+  if (!candidates.length) headerLines.forEach((l, i) => !headerRecipient.has(i) && addCandidate(upperName(l), 'Kop Invoice'))
+  // 2) Area tanda tangan & stempel (bagian bawah dokumen)
+  const signIdx = lines.findIndex((l) => /(hormat kami|regards|sincerely|tertanda)/i.test(l))
+  if (opts.regions?.footer) {
+    const fl = splitLines(opts.regions.footer)
+    const fr = recipientSet(fl)
+    fl.forEach((l, i) => !fr.has(i) && !/\ba\.?\s?n\.?\s/i.test(l) && addCandidate(extractName(l), 'Tanda Tangan / Stempel'))
+  }
+  if (signIdx >= 0) named.filter((c) => c.i > signIdx && !/\ba\.?\s?n\.?\s/i.test(c.l)).forEach((c) => addCandidate(c.name, 'Tanda Tangan / Stempel'))
+  // 3) Nama pemilik rekening (a.n.)
+  const an = text.match(/\ba\.?\s?n\.?\s+((?:PT|CV|UD)?\.?\s*[A-Za-z][A-Za-z0-9 &.,-]{2,60})/i)
+  if (an && !isCompany(an[1])) {
+    p.bankAccountName = titleCase(an[1].replace(/\s+(Bank|No\.?|Rek|Hormat|Jakarta|Bekasi|Tangerang|Bogor|Depok|Surabaya|Bandung).*$/i, '').trim())
+    addCandidate(extractName(p.bankAccountName) || p.bankAccountName, 'Rekening (a.n.)')
+  }
+  // 4) Dekat NPWP vendor
+  const vendorNpwpLine = lines.findIndex((l, i) => /npwp/i.test(l) && !recipientLines.has(i) && !(opts.companyNpwp && sameNPWP(l.replace(/\D/g, ''), opts.companyNpwp)))
+  if (vendorNpwpLine >= 0) named.filter((c) => Math.abs(c.i - vendorNpwpLine) <= 3 && !recipientLines.has(c.i)).forEach((c) => addCandidate(c.name, 'Dekat NPWP'))
+  // 5) Badan usaha lain di isi dokumen
+  named.filter((c) => !recipientLines.has(c.i)).forEach((c) => addCandidate(c.name, 'Isi Dokumen'))
+
+  // Urutkan: dikonfirmasi lebih banyak bagian dokumen → lebih dulu; sisanya sesuai prioritas sumber
+  candidates.sort((a, b) => b.sources.length - a.sources.length)
+  p.vendorCandidates = candidates
+  if (candidates.length) {
+    p.vendorName = candidates[0].name
     mark('vendorName')
-    // Baris sesudah nama vendor (di kop) biasanya alamat
-    const next = lines[pick.i + 1]
-    if (pick.i < 8 && next && !recipientLines.has(pick.i + 1) && !/(telp|tel\.|phone|npwp|@|kepada|invoice)/i.test(next) && /[a-z]/i.test(next)) {
+    // Baris sesudah nama vendor di kop biasanya alamat
+    const at = lines.findIndex((l, i) => i < 10 && !recipientLines.has(i) && coreName(l).includes(coreName(candidates[0].name)))
+    const next = at >= 0 ? lines[at + 1] : undefined
+    if (next && !recipientLines.has(at + 1) && !/(telp|tel\.|phone|npwp|@|kepada|invoice)/i.test(next) && /[a-z]/i.test(next)) {
       // OCR kerap membaca "Jl." sebagai "JI." / "J1."
       p.vendorAddress = next.replace(/^(alamat|address)\s*:?\s*/i, '').replace(/\bJ[I1l]\.\s*/g, 'Jl. ')
       const parts = p.vendorAddress.split(',').map((x) => x.trim()).filter(Boolean)
@@ -304,10 +427,6 @@ export function parseInvoiceText(raw: string, opts: { companyNpwp?: string; comp
   if (email) p.vendorEmail = email[0].toLowerCase()
   const bank = text.match(/\bbank\s+(BCA|BNI|BRI|BSI|BTN|Mandiri|CIMB(?:\s+Niaga)?|Permata|Danamon|OCBC(?:\s+NISP)?|Maybank|Panin|Mega)\b/i)
   if (bank) p.bankName = bank[1].toUpperCase().length <= 4 ? bank[1].toUpperCase() : titleCase(bank[1])
-  const an = text.match(/\ba\.?\s?n\.?\s+((?:PT|CV|UD)?\.?\s*[A-Za-z][A-Za-z0-9 &.,-]{2,60})/i)
-  if (an && !isCompany(an[1])) p.bankAccountName = titleCase(an[1].replace(/\s+(Bank|No\.?|Rek).*$/i, '').trim())
-  // Tanpa badan usaha di teks: pakai nama pemilik rekening sebagai nama vendor
-  if (!p.vendorName && p.bankAccountName) (p.vendorName = p.bankAccountName), mark('vendorName')
 
   // NPWP — abaikan NPWP perusahaan sendiri
   const npwps = [...text.matchAll(/\b(\d{2}[.\s]?\d{3}[.\s]?\d{3}[.\s]?\d[-.\s]?\d{3}[.\s]?\d{3}|\d{4}\s?\d{4}\s?\d{4}\s?\d{4})\b/g)].map((m) => m[1])

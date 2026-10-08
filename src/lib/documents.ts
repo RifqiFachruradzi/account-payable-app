@@ -67,6 +67,30 @@ class Page {
     ctx.bezierCurveTo(cx + 50, cy - 40, cx + 70, cy + 20, cx + 100, cy - 5)
     ctx.stroke()
   }
+  /** Stempel perusahaan: kotak membulat berisi nama & kota, sedikit miring */
+  companyStamp(name: string, city: string, cx: number, cy: number, color = 'rgba(30,64,175,0.7)') {
+    const ctx = this.ctx
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.rotate(-0.07)
+    ctx.font = 'bold 26px Arial, Helvetica, sans-serif'
+    const w = Math.max(ctx.measureText(name.toUpperCase()).width + 50, 260)
+    ctx.strokeStyle = color
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.roundRect(-w / 2, -48, w, 96, 22)
+    ctx.stroke()
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.roundRect(-w / 2 + 7, -41, w - 14, 82, 17)
+    ctx.stroke()
+    ctx.fillStyle = color
+    ctx.textAlign = 'center'
+    ctx.fillText(name.toUpperCase(), 0, 4)
+    ctx.font = 'bold 17px Arial, Helvetica, sans-serif'
+    ctx.fillText(city.toUpperCase(), 0, 32)
+    ctx.restore()
+  }
   stamp(cx: number, cy: number, r = 58, color = 'rgba(30,64,175,0.55)') {
     this.ctx.strokeStyle = color
     this.ctx.lineWidth = 4
@@ -203,7 +227,7 @@ export interface InvoiceDocSpec {
 }
 
 /** Dokumen tagihan dari vendor */
-export function renderInvoiceDocument(s: InvoiceDocSpec, company: CompanySettings, opts: { scanned?: boolean; watermark?: string } = {}) {
+export function renderInvoiceDocument(s: InvoiceDocSpec, company: CompanySettings, opts: { scanned?: boolean; watermark?: string; logoOnly?: boolean } = {}) {
   const p = new Page(opts.scanned ? '#fdfdfb' : '#ffffff')
   const v = s.vendor
   const ppn = Math.round((s.dpp * s.ppnRate) / 100)
@@ -211,7 +235,8 @@ export function renderInvoiceDocument(s: InvoiceDocSpec, company: CompanySetting
 
   p.rect(80, 80, 90, 90, '#123c7a')
   p.text(v.name.split(' ').slice(1, 3).map((w) => w[0]).join(''), 125, 140, 40, true, '#fff', 'center')
-  p.text(v.name.toUpperCase(), 195, 115, 34, true)
+  // logoOnly: kop hanya berupa logo (nama vendor tidak tertulis di bagian atas)
+  if (!opts.logoOnly) p.text(v.name.toUpperCase(), 195, 115, 34, true)
   p.text(`${v.address}, ${v.city}`, 195, 152, 21, false, '#333')
   p.text(`Telp ${v.phone}  |  ${v.email}`, 195, 182, 21, false, '#333')
   p.text(`NPWP : ${v.npwp}`, 195, 212, 21, true, '#333')
@@ -274,8 +299,9 @@ export function renderInvoiceDocument(s: InvoiceDocSpec, company: CompanySetting
 
   p.text(`${v.city}, ${formatDate(s.invoiceDate, true)}`, W - 250, top + 590, 21, false, '#111', 'center')
   p.text('Hormat kami,', W - 250, top + 624, 21, false, '#111', 'center')
+  p.text(v.name, W - 250, top + 652, 19, true, '#111', 'center')
   p.signature(W - 250, top + 715)
-  p.stamp(W - 300, top + 720)
+  p.companyStamp(v.name, v.city, W - 330, top + 720)
   p.text(v.contactPerson, W - 250, top + 800, 21, true, '#111', 'center')
   p.text('Finance', W - 250, top + 830, 19, false, '#444', 'center')
   p.footer('Dokumen ini sah dan diterbitkan secara elektronik.')

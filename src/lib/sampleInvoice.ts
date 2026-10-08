@@ -8,6 +8,8 @@ export interface SampleSpec {
   po?: PurchaseOrder
   description: string
   dpp: number
+  /** kop berupa logo saja — nama vendor hanya ada di stempel / tanda tangan / rekening */
+  logoOnly?: boolean
 }
 
 /** Membuat gambar tagihan vendor (seperti hasil scan) untuk uji coba OCR */
@@ -31,6 +33,6 @@ export function renderSampleInvoice(spec: SampleSpec, company: CompanySettings):
       ppnRate: v.isPkp ? 11 : 0,
     },
     company,
-    { scanned: true },
+    { scanned: true, logoOnly: spec.logoOnly },
   )
 }
