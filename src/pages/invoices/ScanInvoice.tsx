@@ -640,7 +640,7 @@ export default function ScanInvoice() {
           <div className={cn('space-y-4', method === 'Manual' ? 'xl:col-span-5' : 'xl:col-span-3')}>
             <Card title="Dokumen Internal (Rujukan)" subtitle="Ditarik otomatis dari sistem" icon={Link2}>
               <div className="space-y-3">
-                <p className="text-xs text-slate-500">Ketik nomor dokumen — data akan terbaca otomatis.</p>
+                <p className="text-xs text-slate-500">Ketik sebagian nomor dokumen, lalu pilih dari daftar yang muncul.</p>
                 <Field label="No. Surat Perintah Kerja (SPK)">
                   <DocNumberInput
                     docs={spkOptions}

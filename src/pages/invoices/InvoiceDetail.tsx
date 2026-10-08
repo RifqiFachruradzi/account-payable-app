@@ -226,7 +226,7 @@ export default function InvoiceDetail() {
         }
       >
         <div className="space-y-4">
-          <p className="text-xs text-slate-500">Ketik nomor dokumen — data akan terbaca otomatis.</p>
+          <p className="text-xs text-slate-500">Ketik sebagian nomor dokumen, lalu pilih dari daftar yang muncul.</p>
           <Field label="No. SPK">
             <DocNumberInput
               docs={spks.map((x) => ({ id: x.id, number: x.number, detail: `${x.title} • ${vendors.find((v) => v.id === x.vendorId)?.name ?? ''}` }))}
