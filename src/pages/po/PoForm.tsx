@@ -86,9 +86,10 @@ export default function PoForm() {
             <Field label="Vendor" required error={errors.vendorId} className="sm:col-span-2">
               <select className="input" value={f.vendorId} onChange={(e) => pickVendor(e.target.value)}>
                 <option value="">— Pilih vendor —</option>
-                {vendors.filter((v) => v.status === 'Aktif').map((v) => <option key={v.id} value={v.id}>{v.name} • {v.npwp}</option>)}
+                {vendors.filter((v) => v.status === 'Aktif').map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
-              {vendor && <p className="mt-1 text-xs text-slate-500">{vendor.isPkp ? 'PKP' : 'Non-PKP'} • {vendor.withholdingTax} • {vendor.bankName} {vendor.bankAccountNo} • CP {vendor.contactPerson}</p>}
+              {vendor && <p className="mt-1.5 text-xs text-slate-600">NPWP <span className="font-mono font-medium text-slate-800">{vendor.npwp}</span></p>}
+              {vendor && <p className="mt-0.5 text-xs text-slate-500">{vendor.isPkp ? 'PKP' : 'Non-PKP'} • {vendor.withholdingTax} • {vendor.bankName} {vendor.bankAccountNo} • CP {vendor.contactPerson}</p>}
             </Field>
             <Field label="Tanggal PO"><input type="date" className="input" value={f.date} onChange={(e) => set('date', e.target.value)} /></Field>
             <Field label="Tanggal Pengiriman" required error={errors.deliveryDate}><input type="date" className="input" value={f.deliveryDate} onChange={(e) => set('deliveryDate', e.target.value)} /></Field>

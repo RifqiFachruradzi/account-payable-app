@@ -98,9 +98,10 @@ export default function SpkForm() {
             <Field label="Vendor" required error={errors.vendorId} className="sm:col-span-2">
               <select className="input" value={f.vendorId} onChange={(e) => setF((x) => ({ ...x, vendorId: e.target.value, poId: undefined, prId: undefined, ppnRate: vendors.find((v) => v.id === e.target.value)?.isPkp === false ? 0 : x.ppnRate }))}>
                 <option value="">— Pilih vendor —</option>
-                {vendors.filter((v) => v.status === 'Aktif').map((v) => <option key={v.id} value={v.id}>{v.name} • {v.npwp}</option>)}
+                {vendors.filter((v) => v.status === 'Aktif').map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
-              {vendor && <p className="mt-1 text-xs text-slate-500">{vendor.address}, {vendor.city} • CP {vendor.contactPerson}</p>}
+              {vendor && <p className="mt-1.5 text-xs text-slate-600">NPWP <span className="font-mono font-medium text-slate-800">{vendor.npwp}</span></p>}
+              {vendor && <p className="mt-0.5 text-xs text-slate-500">{vendor.address}, {vendor.city} • CP {vendor.contactPerson}</p>}
             </Field>
             <Field label="Rujukan PO (opsional)" className="sm:col-span-2">
               <select className="input" value={f.poId ?? ''} onChange={(e) => pickPo(e.target.value)} disabled={!f.vendorId}>

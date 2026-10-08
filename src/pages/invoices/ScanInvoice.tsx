@@ -487,10 +487,11 @@ export default function ScanInvoice() {
                   <div className="flex gap-2">
                     <select className={cn('input', ocrCls('vendorId'))} value={form.vendorId} onChange={(e) => pickVendor(e.target.value)}>
                       <option value="">— Pilih vendor —</option>
-                      {vendors.filter((v) => v.status !== 'Blacklist').map((v) => <option key={v.id} value={v.id}>{v.name} • {v.npwp}</option>)}
+                      {vendors.filter((v) => v.status !== 'Blacklist').map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
                     <Button variant="secondary" icon={UserPlus} onClick={() => setVendorModal(true)} title="Daftarkan vendor baru" />
                   </div>
+                  {vendor && <p className="mt-1.5 text-xs text-slate-600">NPWP <span className="font-mono font-medium text-slate-800">{vendor.npwp}</span></p>}
                   {refs.vendorBy && form.vendorId === refs.vendorId && (
                     <p className="mt-1 flex items-center gap-1 text-xs text-emerald-700"><Sparkles className="size-3" /> Vendor dikenali otomatis berdasarkan {refs.vendorBy}</p>
                   )}
