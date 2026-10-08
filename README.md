@@ -26,16 +26,17 @@ Dibangun dengan **React 19 + TypeScript + Vite**, **Tailwind CSS v4**, **Rechart
 
 > Gunakan menu profil di kanan atas untuk **berganti pengguna** dan mensimulasikan tanda tangan berjenjang oleh masing-masing PIC.
 
-## Menjalankan
+## Deploy ke Vercel
 
-```bash
-npm install
-npm run dev        # http://localhost:5173
-npm run build      # build produksi ke folder dist/
-npm run typecheck
-```
+1. Buka [vercel.com/new](https://vercel.com/new) → **Import** repository `account-payable-app`.
+2. Pilih branch yang berisi kode ini (atau merge ke `main` terlebih dahulu).
+3. Konfigurasi sudah otomatis dari `vercel.json` (Framework **Vite**, build `npm run build`, output `dist`) — cukup klik **Deploy**.
 
-Data demo tersimpan di `localStorage` browser dan dapat direset dari menu **Pengaturan**.
+Catatan:
+- `vercel.json` sudah berisi *rewrite* SPA, sehingga URL seperti `/invoices/...` atau `/spk/...` bisa dibuka langsung / di-refresh tanpa 404.
+- Aset OCR (worker, WASM, model bahasa) disalin otomatis ke `dist/tesseract` saat build, jadi OCR berjalan dari domain Vercel Anda sendiri (tanpa CDN pihak ketiga).
+- Tidak ada environment variable yang perlu diisi. Node.js ≥ 20.19 (default Vercel sudah sesuai).
+- Data tersimpan di `localStorage` browser masing-masing pengguna (mode demo) dan dapat direset dari menu **Pengaturan**.
 
 ### Catatan OCR
 - OCR berjalan sepenuhnya di browser (dokumen tidak dikirim ke server). Saat pertama dipakai, mesin & model bahasa Tesseract diunduh dari CDN jsDelivr.
