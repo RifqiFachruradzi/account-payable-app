@@ -81,9 +81,9 @@ export function SignatureBox({ label, sig, pending, action }: { label: string; s
         )}
       </div>
       <p className="border-t border-slate-200 pt-1.5 text-sm font-medium text-slate-800">{sig?.name ?? '……………………'}</p>
-      <p className="text-[11px] text-slate-500">{sig?.title || ' '}</p>
-      {sig && <p className="text-[11px] text-slate-400">{formatDateTime(sig.at)}</p>}
-      {sig?.note && <p className="mt-1 rounded bg-slate-50 px-2 py-1 text-[11px] text-slate-600">“{sig.note}”</p>}
+      <p className="text-xs text-slate-500">{sig?.title || ' '}</p>
+      {sig && <p className="text-xs text-slate-400">{formatDateTime(sig.at)}</p>}
+      {sig?.note && <p className="mt-1 rounded bg-slate-50 px-2 py-1 text-xs text-slate-600">“{sig.note}”</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
   )

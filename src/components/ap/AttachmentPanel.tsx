@@ -238,8 +238,8 @@ export function AttachmentPanel({ invoice }: { invoice: Invoice }) {
               <div className="flex items-center gap-2">
                 <c.icon className="size-4 text-brand-600" />
                 <p className="text-sm font-semibold text-slate-800">{c.key}</p>
-                <span className="rounded-full bg-slate-100 px-1.5 text-[11px] tabular-nums text-slate-500">{list.length}</span>
-                {required[c.key] && <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Wajib</span>}
+                <span className="rounded-full bg-slate-100 px-1.5 text-xs tabular-nums text-slate-500">{list.length}</span>
+                {required[c.key] && <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Wajib</span>}
                 <button
                   onClick={() => inputs.current[c.key]?.click()}
                   disabled={busy === `up-${c.key}`}
@@ -261,7 +261,7 @@ export function AttachmentPanel({ invoice }: { invoice: Invoice }) {
                   }}
                 />
               </div>
-              <p className="mt-0.5 text-[11px] text-slate-500">{c.hint}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{c.hint}</p>
               <ul className="mt-2 space-y-1.5">
                 {list.length === 0 && <li className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-center text-xs text-slate-400">Belum ada dokumen</li>}
                 {list.map((it) => {
@@ -274,7 +274,7 @@ export function AttachmentPanel({ invoice }: { invoice: Invoice }) {
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate text-xs font-medium text-slate-800 group-hover:text-brand-700">{it.name}</span>
-                          <span className="block truncate text-[11px] text-slate-500">
+                          <span className="block truncate text-xs text-slate-500">
                             {it.source === 'system' && <span className="mr-1 rounded bg-violet-50 px-1 font-medium text-violet-700">Sistem</span>}
                             {it.meta}
                           </span>

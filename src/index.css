@@ -1,8 +1,13 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* Arial Narrow (Windows/macOS); Archivo Narrow dari Google Fonts sebagai cadangan di perangkat tanpa Arial Narrow */
+  --font-sans: 'Arial Narrow', 'Archivo Narrow', 'Roboto Condensed', Arial, sans-serif;
+  --font-mono: 'Arial Narrow', 'Archivo Narrow', 'Roboto Condensed', Arial, sans-serif;
+  /* Warna latar halaman — sengaja berbeda dari panel/kartu (putih) */
+  --color-page: #e9ecf1;
+  --color-panel: #ffffff;
+  --color-line: #dde2e9;
   --color-brand-50: #eff5ff;
   --color-brand-100: #dbe8fe;
   --color-brand-200: #bfd6fe;
@@ -17,21 +22,22 @@
 }
 
 @layer base {
-  html { -webkit-font-smoothing: antialiased; }
-  body { @apply bg-slate-50 text-slate-800; font-feature-settings: 'cv11', 'ss01', 'tnum'; }
+  /* Huruf narrow tampil lebih kecil — naikkan sedikit ukuran dasar */
+  html { -webkit-font-smoothing: antialiased; font-size: 106.25%; }
+  body { @apply bg-page text-slate-800; font-variant-numeric: tabular-nums; letter-spacing: 0.005em; }
   ::selection { @apply bg-brand-200; }
 }
 
 @layer components {
-  .card { @apply bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(16,24,40,0.04)]; }
+  .card { @apply bg-panel rounded-lg border border-line; }
   .input {
-    @apply w-full h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400
-      focus:outline-none focus:ring-2 focus:ring-brand-500/25 focus:border-brand-500 disabled:bg-slate-50 disabled:text-slate-500 transition;
+    @apply w-full h-9 rounded-md border border-line bg-white px-3 text-sm text-slate-800 placeholder:text-slate-400
+      focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 disabled:bg-slate-50 disabled:text-slate-500 transition;
   }
   textarea.input { @apply h-auto py-2; }
   .label { @apply block text-xs font-medium text-slate-600 mb-1.5; }
-  .th { @apply px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50/80 border-b border-slate-200 whitespace-nowrap; }
-  .td { @apply px-4 py-3 text-sm border-b border-slate-100 align-middle; }
+  .th { @apply px-4 py-2.5 text-left text-xs font-semibold text-slate-500 bg-panel border-b border-line whitespace-nowrap; }
+  .td { @apply px-4 py-2.5 text-sm border-b border-slate-100 align-middle; }
   .num { @apply tabular-nums text-right whitespace-nowrap; }
 }
 

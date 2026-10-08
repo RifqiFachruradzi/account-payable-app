@@ -84,7 +84,7 @@ export function CsvImportModal<T extends { id: string }>({ open, onClose, title,
             <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs text-slate-600">
               {template.notes.map((n) => <li key={n}>{n}</li>)}
             </ul>
-            <p className="mt-2 text-[11px] text-slate-500">Kolom: <span className="font-mono">{template.headers.join(', ')}</span></p>
+            <p className="mt-2 text-xs text-slate-500">Kolom: <span className="font-mono">{template.headers.join(', ')}</span></p>
           </div>
         </div>
 

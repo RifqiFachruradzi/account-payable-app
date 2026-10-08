@@ -55,7 +55,7 @@ export default function SettingsPage() {
                       value={r.minAmount}
                       onChange={(e) => setS({ ...s, approvalMatrix: s.approvalMatrix.map((x, j) => (j === i ? { ...x, minAmount: +e.target.value } : x)) })}
                     />
-                    <p className="mt-0.5 text-right text-[11px] text-slate-400">{r.minAmount ? `≥ ${formatIDR(r.minAmount)}` : 'Selalu'}</p>
+                    <p className="mt-0.5 text-right text-xs text-slate-400">{r.minAmount ? `≥ ${formatIDR(r.minAmount)}` : 'Selalu'}</p>
                   </td>
                 </tr>
               ))}

@@ -5,12 +5,12 @@ import { cn } from '@/lib/cn'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'outline'
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm shadow-brand-600/20',
-  secondary: 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-xs',
+  primary: 'bg-brand-600 text-white hover:bg-brand-700',
+  secondary: 'bg-white text-slate-700 border border-line hover:bg-slate-50',
   outline: 'bg-transparent text-brand-700 border border-brand-200 hover:bg-brand-50',
   ghost: 'text-slate-600 hover:bg-slate-100',
-  danger: 'bg-rose-600 text-white hover:bg-rose-700 shadow-sm',
-  success: 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm',
+  danger: 'bg-rose-600 text-white hover:bg-rose-700',
+  success: 'bg-emerald-600 text-white hover:bg-emerald-700',
 }
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -29,7 +29,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40',
+        'inline-flex items-center justify-center gap-2 rounded-md font-medium transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40',
         size === 'sm' && 'h-8 px-3 text-xs',
         size === 'md' && 'h-9 px-3.5 text-sm',
         size === 'lg' && 'h-11 px-5 text-sm',
@@ -62,7 +62,7 @@ const DOT: Record<Tone, string> = {
 
 export function Badge({ tone = 'slate', dot, children, className }: { tone?: Tone; dot?: boolean; children: ReactNode; className?: string }) {
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset whitespace-nowrap', TONES[tone], className)}>
+    <span className={cn('inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap', TONES[tone], className)}>
       {dot && <span className={cn('size-1.5 rounded-full', DOT[tone])} />}
       {children}
     </span>
@@ -93,12 +93,10 @@ export function Card({ title, subtitle, actions, children, className, bodyClass,
         <header className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
           <div className="flex items-start gap-2.5 min-w-0">
             {Icon && (
-              <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
-                <Icon className="size-4" />
-              </span>
+              <Icon className="mt-0.5 size-4 shrink-0 text-slate-400" />
             )}
             <div className="min-w-0">
-              {title && <h3 className="text-sm font-semibold text-slate-900">{title}</h3>}
+              {title && <h3 className="text-[15px] font-semibold text-slate-900">{title}</h3>}
               {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
             </div>
           </div>
@@ -127,7 +125,7 @@ export function PageHeader({ title, description, actions, breadcrumbs }: {
       )}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+          <h1 className="text-2xl font-semibold text-slate-900 sm:text-[28px]">{title}</h1>
           {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -140,18 +138,20 @@ export function KpiCard({ label, value, hint, icon: Icon, tone = 'blue', trend, 
   label: string; value: ReactNode; hint?: ReactNode; icon: LucideIcon; tone?: Tone; trend?: { value: string; up?: boolean; good?: boolean }; to?: string
 }) {
   const iconTone: Record<Tone, string> = {
-    blue: 'bg-brand-50 text-brand-600', amber: 'bg-amber-50 text-amber-600', emerald: 'bg-emerald-50 text-emerald-600', rose: 'bg-rose-50 text-rose-600',
-    violet: 'bg-violet-50 text-violet-600', cyan: 'bg-cyan-50 text-cyan-600', slate: 'bg-slate-100 text-slate-600', orange: 'bg-orange-50 text-orange-600',
+    blue: 'text-brand-500', amber: 'text-amber-500', emerald: 'text-emerald-500', rose: 'text-rose-500',
+    violet: 'text-violet-500', cyan: 'text-cyan-500', slate: 'text-slate-400', orange: 'text-orange-500',
+  }
+  const kpiAccent: Record<Tone, string> = {
+    blue: 'border-l-brand-500', amber: 'border-l-amber-400', emerald: 'border-l-emerald-500', rose: 'border-l-rose-500',
+    violet: 'border-l-violet-500', cyan: 'border-l-cyan-500', slate: 'border-l-slate-400', orange: 'border-l-orange-500',
   }
   const body = (
-    <div className="card h-full p-4 transition hover:border-slate-300 hover:shadow-md">
+    <div className={cn('card h-full border-l-[3px] p-4 transition hover:border-slate-300', kpiAccent[tone])}>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs font-medium text-slate-500">{label}</p>
-        <span className={cn('grid size-8 place-items-center rounded-lg', iconTone[tone])}>
-          <Icon className="size-4" />
-        </span>
+        <p className="text-[13px] font-medium text-slate-500">{label}</p>
+        <Icon className={cn('size-4', iconTone[tone])} />
       </div>
-      <p className="mt-2 text-xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</p>
+      <p className="mt-1.5 text-2xl font-semibold text-slate-900 tabular-nums">{value}</p>
       <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
         {trend && (
           <span className={cn('font-medium', trend.good ? 'text-emerald-600' : 'text-rose-600')}>
@@ -194,7 +194,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       <div className="absolute inset-0" onClick={onClose} />
       <div
         className={cn(
-          'relative w-full rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5',
+          'relative w-full rounded-lg bg-white shadow-xl ring-1 ring-slate-900/5',
           size === 'sm' && 'max-w-md', size === 'md' && 'max-w-xl', size === 'lg' && 'max-w-3xl', size === 'xl' && 'max-w-5xl',
         )}
       >
@@ -208,7 +208,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
           </button>
         </div>
         <div className="max-h-[70vh] overflow-y-auto px-6 py-5 scrollbar-thin">{children}</div>
-        {footer && <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-6 py-3 rounded-b-2xl">{footer}</div>}
+        {footer && <div className="flex justify-end gap-2 border-t border-line bg-page/40 px-6 py-3 rounded-b-lg">{footer}</div>}
       </div>
     </div>
   )
@@ -229,19 +229,19 @@ export function EmptyState({ title, description, icon: Icon = Inbox, action }: {
 
 export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { value: T; label: string; count?: number }[]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className="flex gap-1 overflow-x-auto scrollbar-thin border-b border-slate-200">
+    <div className="flex gap-1 overflow-x-auto scrollbar-thin border-b border-line">
       {tabs.map((t) => (
         <button
           key={t.value}
           onClick={() => onChange(t.value)}
           className={cn(
-            '-mb-px flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition',
+            '-mb-px flex items-center gap-2 border-b-2 px-3 py-2.5 text-[15px] font-medium whitespace-nowrap transition',
             value === t.value ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700',
           )}
         >
           {t.label}
           {t.count !== undefined && (
-            <span className={cn('rounded-full px-1.5 py-px text-[11px] tabular-nums', value === t.value ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-500')}>
+            <span className={cn('rounded-full px-1.5 py-px text-xs tabular-nums', value === t.value ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-500')}>
               {t.count}
             </span>
           )}

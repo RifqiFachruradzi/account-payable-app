@@ -99,7 +99,7 @@ export default function VendorList() {
                   <td className="td">
                     <div className="flex flex-col items-start gap-1">
                       <Badge tone={v.isPkp ? 'violet' : 'slate'}>{v.isPkp ? 'PKP' : 'Non-PKP'}</Badge>
-                      <span className="text-[11px] text-slate-500">{v.withholdingTax}</span>
+                      <span className="text-xs text-slate-500">{v.withholdingTax}</span>
                     </div>
                   </td>
                   <td className="td text-slate-600">{v.category}</td>

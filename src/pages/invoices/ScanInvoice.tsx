@@ -317,7 +317,7 @@ export default function ScanInvoice() {
   const ocrCls = (k: keyof FormState) => (ocrFilled.has(k) ? 'border-emerald-300 bg-emerald-50/40' : '')
   const OcrTag = ({ k }: { k: keyof FormState }) =>
     ocrFilled.has(k) ? (
-      <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-emerald-100 px-1 text-[10px] font-semibold text-emerald-700">
+      <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-emerald-100 px-1 text-xs font-semibold text-emerald-700">
         <Sparkles className="size-2.5" /> {k === 'spkId' || k === 'poId' || k === 'prId' || k === 'grId' || k === 'vendorId' ? 'AUTO' : 'OCR'}
       </span>
     ) : null
@@ -474,7 +474,7 @@ export default function ScanInvoice() {
                 <button onClick={() => setShowRaw((x) => !x)} className="mt-4 flex items-center gap-1 text-xs font-medium text-brand-600">
                   <ChevronDown className={cn('size-3.5 transition', showRaw && 'rotate-180')} /> {showRaw ? 'Sembunyikan' : 'Lihat'} teks mentah hasil OCR
                 </button>
-                {showRaw && <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 font-mono text-[11px] leading-relaxed text-slate-200 scrollbar-thin">{rawText}</pre>}
+                {showRaw && <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-200 scrollbar-thin">{rawText}</pre>}
               </Card>
             </div>
           )}
@@ -628,7 +628,7 @@ export default function ScanInvoice() {
                         setExtraCat(c)
                         extraRef.current?.click()
                       }}
-                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-brand-300 hover:text-brand-700"
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:border-brand-300 hover:text-brand-700"
                     >
                       <Plus className="size-3" /> {c}
                     </button>

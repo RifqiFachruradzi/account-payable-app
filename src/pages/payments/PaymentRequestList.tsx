@@ -75,7 +75,7 @@ export default function PaymentRequestList() {
                     <td className="td num font-semibold">{formatIDR(p.netAmount)}</td>
                     <td className="td">
                       <ApprovalDots steps={p.steps} />
-                      {next && p.status === 'Menunggu Persetujuan' && <p className="mt-1 text-[11px] text-amber-700">Menunggu: {next.role}</p>}
+                      {next && p.status === 'Menunggu Persetujuan' && <p className="mt-1 text-xs text-amber-700">Menunggu: {next.role}</p>}
                     </td>
                     <td className="td"><StatusBadge status={p.status} /></td>
                   </tr>

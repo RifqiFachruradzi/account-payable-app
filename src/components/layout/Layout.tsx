@@ -75,18 +75,18 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const nav = useNav()
   const settings = useStore((s) => s.settings)
   return (
-    <div className="flex h-full flex-col bg-ink-950 text-slate-300">
+    <div className="flex h-full flex-col border-r border-line bg-panel text-slate-600">
       <Link to="/" className="flex items-center gap-3 px-5 py-5" onClick={onNavigate}>
-        <img src="/favicon.svg" alt="" className="size-9" />
+        <img src="/favicon.svg" alt="" className="size-8" />
         <div className="leading-tight">
-          <p className="text-[15px] font-semibold text-white">AP Hub</p>
-          <p className="text-[11px] text-slate-400">Account Payable System</p>
+          <p className="text-base font-semibold text-slate-900">AP Hub</p>
+          <p className="text-xs text-slate-500">Account Payable System</p>
         </div>
       </Link>
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-6 scrollbar-thin">
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-6 scrollbar-thin">
         {nav.map((g) => (
           <div key={g.group}>
-            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{g.group}</p>
+            <p className="px-3 pb-1 text-xs font-medium text-slate-400">{g.group}</p>
             <ul className="space-y-0.5">
               {g.items.map((it) => (
                 <li key={it.to}>
@@ -96,14 +96,16 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     onClick={onNavigate}
                     className={({ isActive }) =>
                       cn(
-                        'group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition',
-                        isActive ? 'bg-brand-600 text-white shadow-lg shadow-brand-900/40' : 'text-slate-400 hover:bg-white/5 hover:text-white',
+                        'group relative flex items-center gap-3 rounded-md px-3 py-1.5 text-[15px] transition',
+                        isActive
+                          ? 'bg-page font-semibold text-slate-900 before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-brand-600'
+                          : 'text-slate-600 hover:bg-page/60 hover:text-slate-900',
                       )
                     }
                   >
-                    <it.icon className="size-4 shrink-0" />
+                    <it.icon className="size-4 shrink-0 text-slate-400" />
                     <span className="flex-1 truncate">{it.label}</span>
-                    {!!it.badge && <span className="rounded-full bg-amber-400 px-1.5 text-[10px] font-semibold text-slate-900 tabular-nums">{it.badge}</span>}
+                    {!!it.badge && <span className="rounded bg-amber-100 px-1.5 text-xs font-semibold text-amber-800 tabular-nums">{it.badge}</span>}
                   </NavLink>
                 </li>
               ))}
@@ -111,9 +113,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ))}
       </nav>
-      <div className="border-t border-white/5 px-5 py-4">
-        <p className="truncate text-xs font-medium text-slate-300">{settings.companyName}</p>
-        <p className="font-mono text-[11px] text-slate-500">NPWP {settings.companyNpwp}</p>
+      <div className="border-t border-line px-5 py-4">
+        <p className="truncate text-xs font-medium text-slate-700">{settings.companyName}</p>
+        <p className="text-xs text-slate-400">NPWP {settings.companyNpwp}</p>
       </div>
     </div>
   )
@@ -127,10 +129,10 @@ function UserMenu() {
   return (
     <div className="relative">
       <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2.5 rounded-lg py-1 pl-1 pr-2 hover:bg-slate-100">
-        <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-800 text-xs font-semibold text-white">{me.initials}</span>
+        <span className="grid size-8 place-items-center rounded-full bg-slate-800 text-xs font-semibold text-white">{me.initials}</span>
         <span className="hidden text-left leading-tight sm:block">
           <span className="block text-sm font-medium text-slate-800">{me.name}</span>
-          <span className="block text-[11px] text-slate-500">{me.role}</span>
+          <span className="block text-xs text-slate-500">{me.role}</span>
         </span>
         <ChevronDown className="size-4 text-slate-400" />
       </button>
@@ -138,7 +140,7 @@ function UserMenu() {
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-40 mt-2 w-72 rounded-xl bg-white p-1.5 shadow-xl ring-1 ring-slate-900/10">
-            <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Masuk sebagai (simulasi PIC)</p>
+            <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Masuk sebagai (simulasi PIC)</p>
             {users.map((u) => (
               <button
                 key={u.id}
@@ -148,10 +150,10 @@ function UserMenu() {
                 }}
                 className={cn('flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50', u.id === me.id && 'bg-brand-50')}
               >
-                <span className="grid size-7 place-items-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700">{u.initials}</span>
+                <span className="grid size-7 place-items-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">{u.initials}</span>
                 <span className="leading-tight">
                   <span className="block text-sm font-medium text-slate-800">{u.name}</span>
-                  <span className="block text-[11px] text-slate-500">{u.title}</span>
+                  <span className="block text-xs text-slate-500">{u.title}</span>
                 </span>
               </button>
             ))}
@@ -232,7 +234,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       )}
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/85 px-4 backdrop-blur sm:px-6 no-print">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-panel px-4 sm:px-6 no-print">
           <button onClick={() => setMobile(true)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Menu">
             <Menu className="size-5" />
           </button>
@@ -240,11 +242,11 @@ export function Layout({ children }: { children: ReactNode }) {
             {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
           <div className="flex-1" />
-          <Link to="/scan" className="hidden items-center gap-2 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 sm:flex">
+          <Link to="/scan" className="hidden items-center gap-2 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 sm:flex">
             <ScanLine className="size-4" /> Scan Tagihan
           </Link>
           <Notifications />
-          <div className="h-6 w-px bg-slate-200" />
+          <div className="h-6 w-px bg-line" />
           <UserMenu />
         </header>
         <main key={loc.pathname} className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">

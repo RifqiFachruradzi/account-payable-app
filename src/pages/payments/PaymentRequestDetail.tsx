@@ -54,8 +54,8 @@ export default function PaymentRequestDetail() {
               <img src="/favicon.svg" alt="" className="size-12" />
               <div>
                 <p className="text-base font-bold text-slate-900">{settings.companyName}</p>
-                <p className="max-w-md text-[11px] text-slate-500">{settings.companyAddress}</p>
-                <p className="font-mono text-[11px] text-slate-500">NPWP {settings.companyNpwp}</p>
+                <p className="max-w-md text-xs text-slate-500">{settings.companyAddress}</p>
+                <p className="font-mono text-xs text-slate-500">NPWP {settings.companyNpwp}</p>
               </div>
             </div>
             <div className="text-right">
@@ -105,8 +105,8 @@ export default function PaymentRequestDetail() {
                   <td className="border border-slate-300 px-2 py-1.5 align-top">{idx + 1}</td>
                   <td className="border border-slate-300 px-2 py-1.5 align-top whitespace-nowrap">
                     <Link to={`/invoices/${i.id}`} className="font-mono text-xs text-brand-700 hover:underline">{i.vendorInvoiceNo}</Link>
-                    <p className="font-mono text-[10px] text-slate-500">{spks.find((s) => s.id === i.spkId)?.number ?? pos.find((p) => p.id === i.poId)?.number}</p>
-                    {i.fakturPajakNo && <p className="font-mono text-[10px] text-slate-500">FP {i.fakturPajakNo}</p>}
+                    <p className="font-mono text-xs text-slate-500">{spks.find((s) => s.id === i.spkId)?.number ?? pos.find((p) => p.id === i.poId)?.number}</p>
+                    {i.fakturPajakNo && <p className="font-mono text-xs text-slate-500">FP {i.fakturPajakNo}</p>}
                   </td>
                   <td className="border border-slate-300 px-2 py-1.5 align-top text-xs">{i.description}</td>
                   <td className="border border-slate-300 px-2 py-1.5 text-right align-top tabular-nums whitespace-nowrap">{formatIDR(i.dpp)}</td>
@@ -129,19 +129,19 @@ export default function PaymentRequestDetail() {
           <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {prq.steps.map((s) => (
               <div key={s.level} className="flex flex-col rounded-lg border border-slate-200 p-2 text-center">
-                <p className="text-[11px] font-semibold text-slate-600">{s.label}</p>
+                <p className="text-xs font-semibold text-slate-600">{s.label}</p>
                 <div className="my-1 grid h-20 place-items-center">
                   {s.signature ? (
                     <img src={s.signature} alt="ttd" className="max-h-20 max-w-full object-contain" />
                   ) : s.status === 'Ditolak' ? (
                     <span className="rounded border-2 border-rose-500 px-2 py-0.5 text-xs font-bold uppercase text-rose-600 -rotate-6">Ditolak</span>
                   ) : (
-                    <span className="text-[10px] text-slate-300">(belum ditandatangani)</span>
+                    <span className="text-xs text-slate-300">(belum ditandatangani)</span>
                   )}
                 </div>
                 <p className="border-t border-slate-300 pt-1 text-xs font-medium text-slate-800">{s.userName ?? '..................'}</p>
-                <p className="text-[10px] text-slate-500">{s.role}</p>
-                <p className="text-[10px] text-slate-400">{s.signedAt ? formatDate(s.signedAt) : ''}</p>
+                <p className="text-xs text-slate-500">{s.role}</p>
+                <p className="text-xs text-slate-400">{s.signedAt ? formatDate(s.signedAt) : ''}</p>
               </div>
             ))}
           </div>

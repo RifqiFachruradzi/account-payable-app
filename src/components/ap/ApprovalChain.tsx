@@ -12,7 +12,7 @@ export function ApprovalDots({ steps }: { steps: ApprovalStep[] }) {
           <span
             title={`${s.label} — ${s.role}: ${s.status}`}
             className={cn(
-              'grid size-5 place-items-center rounded-full text-[10px] font-semibold',
+              'grid size-5 place-items-center rounded-full text-xs font-semibold',
               s.status === 'Disetujui' && 'bg-emerald-500 text-white',
               s.status === 'Ditolak' && 'bg-rose-500 text-white',
               s.status === 'Menunggu' && 'bg-slate-100 text-slate-400 ring-1 ring-slate-200',

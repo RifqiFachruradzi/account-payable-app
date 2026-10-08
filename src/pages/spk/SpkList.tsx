@@ -134,7 +134,7 @@ export default function SpkList() {
                     </td>
                     <td className="td w-44">
                       <div className="flex items-center gap-2"><Progress value={bp} /><span className="w-9 text-xs tabular-nums">{bp}%</span></div>
-                      <p className="mt-1 text-[11px] text-slate-500">Dibayar {formatCompact(paid)}</p>
+                      <p className="mt-1 text-xs text-slate-500">Dibayar {formatCompact(paid)}</p>
                     </td>
                     <td className="td num">{formatIDR(s.contractValue)}</td>
                     <td className="td num font-semibold text-slate-900">{formatIDR(remaining)}</td>

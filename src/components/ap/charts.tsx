@@ -7,7 +7,7 @@ export const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#
 export const AGING_COLORS = ['#94a3b8', '#fbbf24', '#f59e0b', '#ea580c', '#b91c1c']
 
 export const axisProps = {
-  tick: { fill: '#64748b', fontSize: 11 },
+  tick: { fill: '#64748b', fontSize: 12 },
   axisLine: false,
   tickLine: false,
 } as const

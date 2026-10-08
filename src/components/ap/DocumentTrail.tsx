@@ -45,11 +45,11 @@ export function DocumentTrail({ invoice }: { invoice: Invoice }) {
               <span className={cn('grid size-7 place-items-center rounded-lg', done ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-400')}>
                 <n.icon className="size-3.5" />
               </span>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Langkah {i + 1}</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Langkah {i + 1}</span>
             </div>
             <p className="mt-2 text-xs font-semibold text-slate-700">{n.label}</p>
-            <p className={cn('mt-0.5 truncate font-mono text-[11px]', done ? 'text-brand-700' : 'text-slate-400')}>{n.number ?? 'Belum ada'}</p>
-            {n.date && <p className="text-[11px] text-slate-500">{formatDate(n.date)}</p>}
+            <p className={cn('mt-0.5 truncate font-mono text-xs', done ? 'text-brand-700' : 'text-slate-400')}>{n.number ?? 'Belum ada'}</p>
+            {n.date && <p className="text-xs text-slate-500">{formatDate(n.date)}</p>}
           </div>
         )
         return <li key={n.key}>{n.to && done ? <Link to={n.to}>{inner}</Link> : inner}</li>
